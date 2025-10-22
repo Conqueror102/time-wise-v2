@@ -101,8 +101,10 @@ export interface AttendanceLog {
   method: "qr" | "manual" | "face" | "fingerprint"
   location?: string
   notes?: string
-  checkInPhoto?: string // Base64 image captured at check-in
-  checkOutPhoto?: string // Base64 image captured at check-out
+  checkInPhoto?: string // Cloudinary URL or Base64 image captured at check-in
+  checkOutPhoto?: string // Cloudinary URL or Base64 image captured at check-out
+  checkInPhotoPublicId?: string // Cloudinary public ID for check-in photo
+  checkOutPhotoPublicId?: string // Cloudinary public ID for check-out photo
   photosCapturedAt?: Date
   // Legacy fields for backward compatibility
   checkInTime?: Date

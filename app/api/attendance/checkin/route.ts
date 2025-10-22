@@ -8,6 +8,11 @@ import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { Staff, AttendanceLog } from "@/lib/types"
+import {
+  uploadCheckInPhoto,
+  uploadCheckOutPhoto,
+  isCloudinaryConfigured,
+} from "@/lib/services/cloudinary"
 
 export async function POST(request: NextRequest) {
   try {
@@ -104,9 +109,32 @@ export async function POST(request: NextRequest) {
 
       // Add check-in photo if provided
       if (photo) {
-        console.log("Saving check-in photo, length:", photo.length)
-        logData.checkInPhoto = photo
-        logData.photosCapturedAt = now
+        console.log("Uploading check-in photo to Cloudinary...")
+        
+        if (isCloudinaryConfigured()) {
+          const uploadResult = await uploadCheckInPhoto(
+            photo,
+            staffId,
+            finalTenantId
+          )
+
+          if (uploadResult.success && uploadResult.url) {
+            logData.checkInPhoto = uploadResult.url
+            logData.checkInPhotoPublicId = uploadResult.publicId
+            logData.photosCapturedAt = now
+            console.log("Check-in photo uploaded successfully:", uploadResult.url)
+          } else {
+            console.warn("Failed to upload check-in photo:", uploadResult.error)
+            // Fallback: Store base64 if Cloudinary fails
+            logData.checkInPhoto = photo
+            logData.photosCapturedAt = now
+          }
+        } else {
+          console.warn("Cloudinary not configured, storing base64")
+          // Fallback: Store base64 if Cloudinary not configured
+          logData.checkInPhoto = photo
+          logData.photosCapturedAt = now
+        }
       } else {
         console.log("No check-in photo provided")
       }
@@ -154,10 +182,37 @@ export async function POST(request: NextRequest) {
 
       // Add check-out photo if provided
       if (photo) {
-        console.log("Saving check-out photo, length:", photo.length)
-        updateData.checkOutPhoto = photo
-        if (!existingRecord.photosCapturedAt) {
-          updateData.photosCapturedAt = now
+        console.log("Uploading check-out photo to Cloudinary...")
+        
+        if (isCloudinaryConfigured()) {
+          const uploadResult = await uploadCheckOutPhoto(
+            photo,
+            staffId,
+            finalTenantId
+          )
+
+          if (uploadResult.success && uploadResult.url) {
+            updateData.checkOutPhoto = uploadResult.url
+            updateData.checkOutPhotoPublicId = uploadResult.publicId
+            if (!existingRecord.photosCapturedAt) {
+              updateData.photosCapturedAt = now
+            }
+            console.log("Check-out photo uploaded successfully:", uploadResult.url)
+          } else {
+            console.warn("Failed to upload check-out photo:", uploadResult.error)
+            // Fallback: Store base64 if Cloudinary fails
+            updateData.checkOutPhoto = photo
+            if (!existingRecord.photosCapturedAt) {
+              updateData.photosCapturedAt = now
+            }
+          }
+        } else {
+          console.warn("Cloudinary not configured, storing base64")
+          // Fallback: Store base64 if Cloudinary not configured
+          updateData.checkOutPhoto = photo
+          if (!existingRecord.photosCapturedAt) {
+            updateData.photosCapturedAt = now
+          }
         }
       } else {
         console.log("No check-out photo provided")

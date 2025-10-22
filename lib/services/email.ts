@@ -187,6 +187,42 @@ export async function sendPasswordResetEmail({
 }
 
 /**
+ * Generic send email function for custom emails
+ */
+export async function sendEmail({
+  to,
+  subject,
+  html,
+}: {
+  to: string
+  subject: string
+  html: string
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+    })
+
+    if (error) {
+      console.error("Resend email error:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("Email sent successfully:", data?.id)
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to send email:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send email",
+    }
+  }
+}
+
+/**
  * Send welcome email after verification
  */
 export async function sendWelcomeEmail(

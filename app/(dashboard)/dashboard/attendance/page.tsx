@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { getImageSrc } from "@/lib/utils/image"
 
 interface AttendanceLog {
   _id: string
@@ -442,7 +443,7 @@ export default function AttendancePage() {
                             {log.checkInPhoto && (
                               <div className="relative group">
                                 <img
-                                  src={`data:image/jpeg;base64,${log.checkInPhoto}`}
+                                  src={getImageSrc(log.checkInPhoto)}
                                   alt="Check-in photo"
                                   className="w-10 h-10 rounded-lg object-cover cursor-pointer border-2 border-green-200 hover:border-green-400 transition-colors"
                                   onClick={() => setSelectedPhoto({
@@ -460,7 +461,7 @@ export default function AttendancePage() {
                             {log.checkOutPhoto && (
                               <div className="relative group">
                                 <img
-                                  src={`data:image/jpeg;base64,${log.checkOutPhoto}`}
+                                  src={getImageSrc(log.checkOutPhoto)}
                                   alt="Check-out photo"
                                   className="w-10 h-10 rounded-lg object-cover cursor-pointer border-2 border-blue-200 hover:border-blue-400 transition-colors"
                                   onClick={() => setSelectedPhoto({
@@ -523,7 +524,7 @@ export default function AttendancePage() {
             {/* Modal Body - Flexible height */}
             <div className="flex-1 p-2 sm:p-4 flex justify-center items-center min-h-0">
               <img
-                src={`data:image/jpeg;base64,${selectedPhoto.photo}`}
+                src={getImageSrc(selectedPhoto.photo)}
                 alt={`${selectedPhoto.type} photo`}
                 className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
               />
@@ -544,7 +545,7 @@ export default function AttendancePage() {
                   onClick={() => {
                     // Create download link
                     const link = document.createElement('a')
-                    link.href = `data:image/jpeg;base64,${selectedPhoto.photo}`
+                    link.href = getImageSrc(selectedPhoto.photo)
                     link.download = `${selectedPhoto.staffName}-${selectedPhoto.type}-${new Date(selectedPhoto.timestamp).toISOString().slice(0,10)}.jpg`
                     link.click()
                   }}

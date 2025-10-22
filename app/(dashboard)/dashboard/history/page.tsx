@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getImageSrc } from "@/lib/utils/image"
 import { Calendar, Filter, Download, Search, FileText } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -325,22 +326,22 @@ export default function HistoryPage() {
                       <div className="flex gap-2 mt-2">
                         {(record as any).checkInPhoto && (
                           <img 
-                            src={`data:image/jpeg;base64,${(record as any).checkInPhoto}`}
+                            src={getImageSrc((record as any).checkInPhoto)}
                             alt="Check-in photo"
                             className="w-12 h-12 rounded object-cover cursor-pointer border-2 border-green-200"
                             onClick={() => {
-                              window.open(`data:image/jpeg;base64,${(record as any).checkInPhoto}`, '_blank')
+                              window.open(getImageSrc((record as any).checkInPhoto), '_blank')
                             }}
                             title="Check-in photo - Click to view full size"
                           />
                         )}
                         {(record as any).checkOutPhoto && (
                           <img 
-                            src={`data:image/jpeg;base64,${(record as any).checkOutPhoto}`}
+                            src={getImageSrc((record as any).checkOutPhoto)}
                             alt="Check-out photo"
                             className="w-12 h-12 rounded object-cover cursor-pointer border-2 border-blue-200"
                             onClick={() => {
-                              window.open(`data:image/jpeg;base64,${(record as any).checkOutPhoto}`, '_blank')
+                              window.open(getImageSrc((record as any).checkOutPhoto), '_blank')
                             }}
                             title="Check-out photo - Click to view full size"
                           />

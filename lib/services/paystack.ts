@@ -254,3 +254,161 @@ export async function createCustomer(
     }
   }
 }
+
+/**
+ * Super Admin Functions
+ */
+
+/**
+ * Get all transactions (for super admin)
+ */
+export async function getAllTransactions(params?: {
+  page?: number
+  perPage?: number
+  from?: string
+  to?: string
+}): Promise<{
+  success: boolean
+  transactions?: any[]
+  meta?: any
+  error?: string
+}> {
+  try {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.perPage) queryParams.set("perPage", params.perPage.toString())
+    if (params?.from) queryParams.set("from", params.from)
+    if (params?.to) queryParams.set("to", params.to)
+
+    const response = await fetch(
+      `${PAYSTACK_BASE_URL}/transaction?${queryParams.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    )
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to fetch transactions",
+      }
+    }
+
+    return {
+      success: true,
+      transactions: data.data,
+      meta: data.meta,
+    }
+  } catch (error: any) {
+    console.error("Paystack get transactions error:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to fetch transactions",
+    }
+  }
+}
+
+/**
+ * Get all subscriptions (for super admin)
+ */
+export async function getAllSubscriptions(params?: {
+  page?: number
+  perPage?: number
+}): Promise<{
+  success: boolean
+  subscriptions?: any[]
+  meta?: any
+  error?: string
+}> {
+  try {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.perPage) queryParams.set("perPage", params.perPage.toString())
+
+    const response = await fetch(
+      `${PAYSTACK_BASE_URL}/subscription?${queryParams.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    )
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to fetch subscriptions",
+      }
+    }
+
+    return {
+      success: true,
+      subscriptions: data.data,
+      meta: data.meta,
+    }
+  } catch (error: any) {
+    console.error("Paystack get subscriptions error:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to fetch subscriptions",
+    }
+  }
+}
+
+/**
+ * Get all plans (for super admin)
+ */
+export async function getAllPlans(params?: {
+  page?: number
+  perPage?: number
+}): Promise<{
+  success: boolean
+  plans?: any[]
+  meta?: any
+  error?: string
+}> {
+  try {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.perPage) queryParams.set("perPage", params.perPage.toString())
+
+    const response = await fetch(
+      `${PAYSTACK_BASE_URL}/plan?${queryParams.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    )
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to fetch plans",
+      }
+    }
+
+    return {
+      success: true,
+      plans: data.data,
+      meta: data.meta,
+    }
+  } catch (error: any) {
+    console.error("Paystack get plans error:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to fetch plans",
+    }
+  }
+}
