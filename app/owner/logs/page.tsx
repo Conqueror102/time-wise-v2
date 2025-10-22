@@ -31,7 +31,7 @@ export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [actionFilter, setActionFilter] = useState("")
+  const [actionFilter, setActionFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [exporting, setExporting] = useState(false)
@@ -46,7 +46,7 @@ export default function AuditLogsPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         ...(search && { search }),
-        ...(actionFilter && { action: actionFilter }),
+        ...(actionFilter && actionFilter !== "all" && { action: actionFilter }),
       })
 
       const response = await fetch(`/api/owner/logs?${params}`)
@@ -67,7 +67,7 @@ export default function AuditLogsPage() {
     try {
       const params = new URLSearchParams({
         ...(search && { search }),
-        ...(actionFilter && { action: actionFilter }),
+        ...(actionFilter && actionFilter !== "all" && { action: actionFilter }),
       })
 
       const response = await fetch(`/api/owner/logs/export?${params}`)
@@ -223,7 +223,7 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder="Filter by action" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="all">All Actions</SelectItem>
                   {actionTypes.map((action) => (
                     <SelectItem key={action} value={action}>
                       {action}

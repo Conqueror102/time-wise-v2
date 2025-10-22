@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import clientPromise from "@/lib/mongodb"
+import { getDatabase } from "@/lib/mongodb"
 
 export async function GET() {
   try {
-    const client = await clientPromise
-    const db = client.db("staff_checkin")
+    const db = await getDatabase()
 
     let settings = await db.collection("settings").findOne({})
 
@@ -28,8 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     const { latenessTime, workEndTime } = await request.json()
 
-    const client = await clientPromise
-    const db = client.db("staff_checkin")
+    const db = await getDatabase()
 
     await db.collection("settings").updateOne(
       {},

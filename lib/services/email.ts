@@ -5,7 +5,15 @@
 
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialize Resend to avoid build-time errors
+let resend: Resend | null = null
+
+function getResendClient() {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "TimeWise <onboarding@resend.dev>"
 const APP_NAME = "TimeWise"
@@ -34,7 +42,12 @@ export async function sendOTPEmail({
   expiresInMinutes = 10,
 }: SendOTPEmailParams): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data, error } = await resend.emails.send({
+    const client = getResendClient()
+    if (!client) {
+      return { success: false, error: "Email service not configured" }
+    }
+
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to,
       subject: `${APP_NAME} - Verify Your Email`,
@@ -110,7 +123,12 @@ export async function sendPasswordResetEmail({
   const resetUrl = `${APP_URL}/reset-password?token=${resetToken}`
 
   try {
-    const { data, error } = await resend.emails.send({
+    const client = getResendClient()
+    if (!client) {
+      return { success: false, error: "Email service not configured" }
+    }
+
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to,
       subject: `${APP_NAME} - Reset Your Password`,
@@ -199,7 +217,12 @@ export async function sendEmail({
   html: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data, error } = await resend.emails.send({
+    const client = getResendClient()
+    if (!client) {
+      return { success: false, error: "Email service not configured" }
+    }
+
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
@@ -231,7 +254,12 @@ export async function sendWelcomeEmail(
   organizationName: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data, error } = await resend.emails.send({
+    const client = getResendClient()
+    if (!client) {
+      return { success: false, error: "Email service not configured" }
+    }
+
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to,
       subject: `Welcome to ${APP_NAME}! 🎉`,

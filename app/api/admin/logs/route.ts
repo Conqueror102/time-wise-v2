@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import clientPromise from "@/lib/mongodb"
+import { getDatabase } from "@/lib/mongodb"
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,8 +8,7 @@ export async function GET(request: NextRequest) {
     const department = searchParams.get("department")
     const lateOnly = searchParams.get("lateOnly") === "true"
 
-    const client = await clientPromise
-    const db = client.db("staff_checkin")
+    const db = await getDatabase()
 
     const query: any = {}
 

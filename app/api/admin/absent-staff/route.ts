@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import clientPromise from "@/lib/mongodb"
+import { getDatabase } from "@/lib/mongodb"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
 
-    const client = await clientPromise
-    const db = client.db("staff_checkin")
+    const db = await getDatabase()
 
     // Get all staff
     const allStaff = await db.collection("staff").find({}).toArray()
