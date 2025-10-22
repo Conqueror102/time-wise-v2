@@ -1,0 +1,256 @@
+/**
+ * Paystack Payment Service (Nigerian Payment Gateway)
+ * Clean and modular implementation
+ */
+
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
+const PAYSTACK_BASE_URL = "https://api.paystack.co"
+
+export interface PaystackInitializeResponse {
+  success: boolean
+  authorizationUrl?: string
+  reference?: string
+  error?: string
+}
+
+export interface PaystackVerifyResponse {
+  success: boolean
+  amount?: number
+  currency?: string
+  status?: string
+  reference?: string
+  metadata?: Record<string, any>
+  customer?: {
+    customer_code: string
+    email: string
+  }
+  error?: string
+}
+
+/**
+ * Initialize Paystack payment
+ */
+export async function initializePayment(
+  email: string,
+  amount: number, // Amount in kobo (₦1 = 100 kobo)
+  metadata: Record<string, any>
+): Promise<PaystackInitializeResponse> {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        amount, // In kobo
+        currency: "NGN",
+        metadata,
+        callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/callback`,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to initialize payment",
+      }
+    }
+
+    return {
+      success: true,
+      authorizationUrl: data.data.authorization_url,
+      reference: data.data.reference,
+    }
+  } catch (error: any) {
+    console.error("Paystack initialize error:", error)
+    return {
+      success: false,
+      error: error.message || "Payment initialization failed",
+    }
+  }
+}
+
+/**
+ * Verify Paystack payment
+ */
+export async function verifyPayment(reference: string): Promise<PaystackVerifyResponse> {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      },
+    })
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Payment verification failed",
+      }
+    }
+
+    return {
+      success: true,
+      amount: data.data.amount,
+      currency: data.data.currency,
+      status: data.data.status,
+      reference: data.data.reference,
+      metadata: data.data.metadata,
+      customer: data.data.customer,
+    }
+  } catch (error: any) {
+    console.error("Paystack verify error:", error)
+    return {
+      success: false,
+      error: error.message || "Payment verification failed",
+    }
+  }
+}
+
+/**
+ * Convert Naira to Kobo
+ */
+export function nairaToKobo(naira: number): number {
+  return Math.round(naira * 100)
+}
+
+/**
+ * Convert Kobo to Naira
+ */
+export function koboToNaira(kobo: number): number {
+  return kobo / 100
+}
+
+/**
+ * Initialize Paystack subscription
+ */
+export async function initializeSubscription(
+  email: string,
+  planCode: string,
+  metadata: Record<string, any>
+): Promise<PaystackInitializeResponse> {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/subscription`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customer: email,
+        plan: planCode,
+        metadata,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to initialize subscription",
+      }
+    }
+
+    return {
+      success: true,
+      authorizationUrl: data.data.authorization_url || "",
+      reference: data.data.subscription_code,
+    }
+  } catch (error: any) {
+    console.error("Paystack subscription error:", error)
+    return {
+      success: false,
+      error: error.message || "Subscription initialization failed",
+    }
+  }
+}
+
+/**
+ * Cancel Paystack subscription
+ */
+export async function cancelSubscription(
+  subscriptionCode: string,
+  emailToken: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/subscription/disable`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: subscriptionCode,
+        token: emailToken,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to cancel subscription",
+      }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Paystack cancel subscription error:", error)
+    return {
+      success: false,
+      error: error.message || "Subscription cancellation failed",
+    }
+  }
+}
+
+/**
+ * Create Paystack customer
+ */
+export async function createCustomer(
+  email: string,
+  firstName: string,
+  lastName: string
+): Promise<{ success: boolean; customerCode?: string; error?: string }> {
+  try {
+    const response = await fetch(`${PAYSTACK_BASE_URL}/customer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        first_name: firstName,
+        last_name: lastName,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.status) {
+      return {
+        success: false,
+        error: data.message || "Failed to create customer",
+      }
+    }
+
+    return {
+      success: true,
+      customerCode: data.data.customer_code,
+    }
+  } catch (error: any) {
+    console.error("Paystack create customer error:", error)
+    return {
+      success: false,
+      error: error.message || "Customer creation failed",
+    }
+  }
+}
