@@ -78,10 +78,16 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
 
     if (credential) {
       const credentialId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
-      const publicKey = btoa(
+      const attestationResponse = credential.response as AuthenticatorAttestationResponse
+      
+      // Get the full attestation object instead of trying to get the public key directly
+      const attestationObject = new Uint8Array(attestationResponse.attestationObject)
+      const clientDataJSON = new Uint8Array(attestationResponse.clientDataJSON)
+      
+      const publicKeyData = btoa(
         String.fromCharCode(
           ...new Uint8Array(
-            (credential.response as AuthenticatorAttestationResponse).getPublicKey() || new ArrayBuffer(0)
+            attestationObject
           )
         )
       )
@@ -95,10 +101,13 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
         body: JSON.stringify({
           staffId,
           credentialId,
-          publicKey,
+          publicKey: publicKeyData,
+          attestationObject: btoa(String.fromCharCode(...attestationObject)),
+          clientDataJSON: btoa(String.fromCharCode(...clientDataJSON)),
           deviceName: navigator.userAgent.includes("Mac") ? "Mac" : 
                       navigator.userAgent.includes("Windows") ? "Windows" :
-                      navigator.userAgent.includes("iPhone") ? "iPhone" : "Device",
+                      navigator.userAgent.includes("iPhone") ? "iPhone" :
+                      navigator.userAgent.includes("Android") ? "Android" : "Device",
         }),
       })
 
@@ -116,6 +125,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
   const authenticateFingerprint = async () => {
     const challenge = new Uint8Array(32)
     crypto.getRandomValues(challenge)
+    const challengeBase64 = btoa(String.fromCharCode(...challenge))
 
     const assertion = (await navigator.credentials.get({
       publicKey: {
@@ -127,6 +137,11 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
 
     if (assertion) {
       const credentialId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)))
+      const assertionResponse = assertion.response as AuthenticatorAssertionResponse
+      
+      const authenticatorData = btoa(String.fromCharCode(...new Uint8Array(assertionResponse.authenticatorData)))
+      const clientDataJSON = btoa(String.fromCharCode(...new Uint8Array(assertionResponse.clientDataJSON)))
+      const signature = btoa(String.fromCharCode(...new Uint8Array(assertionResponse.signature)))
 
       // Verify with database
       const response = await fetch("/api/biometric/fingerprint/authenticate", {
@@ -136,6 +151,10 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
         },
         body: JSON.stringify({
           credentialId,
+          challenge: challengeBase64,
+          authenticatorData,
+          clientDataJSON,
+          signature,
         }),
       })
 
@@ -154,10 +173,10 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <Card className="glass-card shadow-xl border-2 border-purple-200">
+      <Card className="glass-card shadow-xl border-2 border-blue-200">
         <CardHeader className="text-center">
           <div className="flex justify-between items-center mb-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto bg-gradient-to-r from-accent-blue to-accent-blue-light rounded-2xl flex items-center justify-center">
               <Fingerprint className="w-8 h-8 text-white" />
             </div>
             {onClose && (
@@ -181,7 +200,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
             <div
               className={`w-24 h-24 mx-auto rounded-full border-4 flex items-center justify-center transition-all duration-300 ${
                 isScanning
-                  ? "border-purple-500 bg-purple-50 animate-pulse"
+                  ? "border-accent-blue bg-blue-50 animate-pulse"
                   : success
                     ? "border-green-500 bg-green-50"
                     : "border-gray-300 bg-gray-50"
@@ -190,12 +209,12 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
               {success ? (
                 <CheckCircle className="w-12 h-12 text-green-600" />
               ) : (
-                <Fingerprint className={`w-12 h-12 ${isScanning ? "text-purple-600" : "text-gray-400"}`} />
+                <Fingerprint className={`w-12 h-12 ${isScanning ? "text-accent-blue" : "text-gray-400"}`} />
               )}
             </div>
 
             <div className="mt-4">
-              {isScanning && <p className="text-purple-600 font-medium">Scanning fingerprint...</p>}
+              {isScanning && <p className="text-accent-blue font-medium">Scanning fingerprint...</p>}
               {success && (
                 <p className="text-green-600 font-medium">
                   Fingerprint {mode === "register" ? "registered" : "authenticated"} successfully!
@@ -224,7 +243,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
               <Button
                 onClick={startFingerprint}
                 disabled={isScanning || !checkWebAuthnSupport()}
-                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                className="flex-1 bg-gradient-to-r from-accent-blue to-accent-blue-light hover:from-blue-700 hover:to-blue-600 text-white"
               >
                 {isScanning ? "Scanning..." : `${mode === "register" ? "Register" : "Scan"} Fingerprint`}
               </Button>

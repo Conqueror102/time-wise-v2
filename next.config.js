@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["mongodb"],
-  },
+  serverExternalPackages: ["mongodb"],
   images: {
     domains: ["localhost"],
+    unoptimized: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -12,9 +11,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
-  },
+  outputFileTracingRoot: process.cwd(),
 }
 
 module.exports = nextConfig

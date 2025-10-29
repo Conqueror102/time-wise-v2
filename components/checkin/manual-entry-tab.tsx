@@ -20,11 +20,14 @@ interface ManualEntryTabProps {
   setStaffId: (id: string) => void
   loading: boolean
   error: string
+  message: string
+  messageType: "success" | "error" | ""
   capturePhotos: boolean
   attendanceStatus: AttendanceStatus | null
   statusLoading: boolean
   onCheckIn: (type: "check-in" | "check-out") => void
   onCheckAttendanceStatus: (staffId: string) => void
+  onClearMessage: () => void
 }
 
 export function ManualEntryTab({
@@ -32,11 +35,14 @@ export function ManualEntryTab({
   setStaffId,
   loading,
   error,
+  message,
+  messageType,
   capturePhotos,
   attendanceStatus,
   statusLoading,
   onCheckIn,
   onCheckAttendanceStatus,
+  onClearMessage,
 }: ManualEntryTabProps) {
   return (
     <div className="space-y-4">

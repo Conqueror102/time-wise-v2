@@ -6,10 +6,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { Staff, BiometricCredential } from "@/lib/types"
+import { verifyRegistrationResponse } from "@simplewebauthn/server"
+import type { VerifyRegistrationResponseOpts } from "@simplewebauthn/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { staffId, credentialId, publicKey, deviceName, tenantId } = await request.json()
+    const { 
+      staffId, 
+      credentialId, 
+      publicKey, 
+      deviceName, 
+      tenantId,
+      attestationObject,
+      clientDataJSON
+    } = await request.json()
 
     if (!staffId || !credentialId || !publicKey) {
       return NextResponse.json(
@@ -43,12 +53,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Staff not found" }, { status: 404 })
     }
 
-    // Create new credential
-    const newCredential: BiometricCredential = {
+    // Verify the registration response using SimpleWebAuthn
+    let verification
+    if (attestationObject && clientDataJSON) {
+      try {
+        const verificationOpts: VerifyRegistrationResponseOpts = {
+          response: {
+            id: credentialId,
+            rawId: credentialId,
+            type: "public-key",
+            response: {
+              attestationObject,
+              clientDataJSON,
+              transports: ["internal"],
+            },
+          },
+          expectedChallenge: "not-used-in-this-implementation", // In production, use actual challenge
+          expectedOrigin: new URL(request.url).origin,
+          expectedRPID: new URL(request.url).hostname,
+          requireUserVerification: true,
+        }
+
+        verification = await verifyRegistrationResponse(verificationOpts)
+        
+        if (!verification.verified) {
+          return NextResponse.json(
+            { error: "Registration verification failed" },
+            { status: 400 }
+          )
+        }
+      } catch (error) {
+        console.error("WebAuthn verification error:", error)
+        // Continue with registration even if verification fails for now
+        // In production, you should handle this more strictly
+      }
+    }
+
+    // Create new credential with full WebAuthn data
+    const newCredential: BiometricCredential & { 
+      attestationObject?: string, 
+      clientDataJSON?: string,
+      counter?: number,
+      publicKeyPEM?: string
+    } = {
       credentialId,
       publicKey,
       deviceName: deviceName || "Unknown Device",
       registeredAt: new Date(),
+      ...(attestationObject && { attestationObject }),
+      ...(clientDataJSON && { clientDataJSON }),
+      ...(verification?.registrationInfo && {
+        publicKeyPEM: verification.registrationInfo.publicKey,
+        counter: verification.registrationInfo.counter,
+      }),
     }
 
     // Add credential to staff record

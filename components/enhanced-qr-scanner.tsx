@@ -20,6 +20,8 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
   const elementId = useRef(`qr-reader-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).current
   const mountedRef = useRef(true)
   const cleanupInProgressRef = useRef(false)
+  const lastScanRef = useRef("")
+  const lastScanTimeRef = useRef(0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -195,7 +197,19 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         config,
         async (decodedText) => {
           if (!mountedRef.current) return
+          
+          // Prevent duplicate scans within 2 seconds
+          const now = Date.now()
+          if (decodedText === lastScanRef.current && (now - lastScanTimeRef.current) < 2000) {
+            console.log("Duplicate scan ignored")
+            return
+          }
+          
           console.log("QR Code detected:", decodedText)
+          
+          // Update last scan info
+          lastScanRef.current = decodedText
+          lastScanTimeRef.current = now
           
           // Stop scanning immediately after successful scan
           await cleanup()

@@ -31,6 +31,8 @@ export default function CheckInPage() {
   const [capturePhotos, setCapturePhotos] = useState(false)
   const [showQRSuccess, setShowQRSuccess] = useState(false)
   const [scannerClosing, setScannerClosing] = useState(false)
+  const [message, setMessage] = useState("")
+  const [messageType, setMessageType] = useState<"success" | "error" | "">("")
 
   // Use custom hook for check-in logic
   const {
@@ -58,26 +60,48 @@ export default function CheckInPage() {
     try {
       // Decode QR code data
       let decodedStaffId = scannedId.trim()
+      let decodedData: any = null
 
+      // Try to decode base64 encoded JSON
       if (scannedId.includes("eyJ") || scannedId.includes("=")) {
         try {
           const decoded = atob(scannedId)
-          const parsed = JSON.parse(decoded)
-          decodedStaffId = parsed.staffId || parsed.id || scannedId
+          decodedData = JSON.parse(decoded)
+          decodedStaffId = decodedData.staffId || decodedData.id || scannedId
+          console.log("Decoded QR data:", decodedData)
         } catch (e) {
-          console.log("QR decode failed, using raw value")
+          console.log("QR decode failed, using raw value:", e)
         }
       }
 
-      if (!decodedStaffId || decodedStaffId.length < 2) {
+      // Validate staff ID
+      if (!decodedStaffId || decodedStaffId.length === 0) {
+        setMessage("Invalid QR code: No staff ID found")
+        setMessageType("error")
+        setShowScanner(false)
+        setScannerKey((prev) => prev + 1)
         return
       }
 
-      const finalStaffId = decodedStaffId.toUpperCase()
+      // Clean up staff ID
+      const finalStaffId = decodedStaffId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+
+      if (!finalStaffId || finalStaffId.length === 0) {
+        setMessage("Invalid QR code: Invalid staff ID format")
+        setMessageType("error")
+        setShowScanner(false)
+        setScannerKey((prev) => prev + 1)
+        return
+      }
+
+      // Update state
       setStaffId(finalStaffId)
       setShowScanner(false)
       setScannerKey((prev) => prev + 1)
+      setMessage("QR code scanned successfully!")
+      setMessageType("success")
 
+      // Check attendance status
       await checkAttendanceStatus(finalStaffId)
 
       // Scroll to action buttons after QR scan
@@ -93,6 +117,8 @@ export default function CheckInPage() {
       }, 500)
     } catch (err) {
       console.error("QR scan error:", err)
+      setMessage("Failed to process QR code. Please try again.")
+      setMessageType("error")
       setShowScanner(false)
       setScannerKey((prev) => prev + 1)
     }
@@ -182,6 +208,8 @@ export default function CheckInPage() {
       setStaffId("")
       resetAttendanceStatus()
       clearMessages()
+      setMessage("")
+      setMessageType("")
 
       // Small delay to ensure cleanup
       await new Promise(resolve => setTimeout(resolve, 200))
@@ -278,6 +306,17 @@ export default function CheckInPage() {
     }
   }, [activeTab, showScanner])
 
+  // Auto-clear messages after delay
+  React.useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => {
+        setMessage("")
+        setMessageType("")
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
+
   if (!isUnlocked) {
     return <UnlockScreen onUnlock={handleUnlock} />
   }
@@ -323,11 +362,17 @@ export default function CheckInPage() {
                   setStaffId={setStaffId}
                   loading={loading}
                   error={error}
+                  message={message}
+                  messageType={messageType}
                   capturePhotos={capturePhotos}
                   attendanceStatus={attendanceStatus}
                   statusLoading={statusLoading}
                   onCheckIn={handleCheckIn}
                   onCheckAttendanceStatus={checkAttendanceStatus}
+                  onClearMessage={() => {
+                    setMessage("")
+                    setMessageType("")
+                  }}
                 />
               </TabsContent>
 
