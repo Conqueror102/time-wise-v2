@@ -32,6 +32,7 @@ interface AttendanceLog {
 export default function AttendancePage() {
   const [logs, setLogs] = useState<AttendanceLog[]>([])
   const [allLogs, setAllLogs] = useState<AttendanceLog[]>([])
+  const [originalLogs, setOriginalLogs] = useState<any[]>([]) // Store original data for stats
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedDate, setSelectedDate] = useState(
@@ -87,8 +88,47 @@ export default function AttendancePage() {
       }
 
       const data = await response.json()
-      setAllLogs(data.logs || [])
-      setLogs(data.logs || [])
+      
+      // Store original logs for stats calculation
+      setOriginalLogs(data.logs || [])
+      
+      // Split logs into separate check-in and check-out rows
+      const expandedLogs: AttendanceLog[] = []
+      
+      data.logs.forEach((log: any) => {
+        // Add check-in row if check-in exists
+        if (log.checkInTime) {
+          expandedLogs.push({
+            ...log,
+            _id: `${log._id}-in`,
+            type: "check-in",
+            timestamp: log.checkInTime,
+            method: log.checkInMethod || log.method,
+            checkOutPhoto: undefined, // Only show check-in photo
+            // For check-in, show late status if applicable
+            status: log.isLate ? "late" : "present",
+            isEarly: false, // Check-in can't be early
+          })
+        }
+        
+        // Add check-out row ONLY if check-out actually exists
+        if (log.checkOutTime) {
+          expandedLogs.push({
+            ...log,
+            _id: `${log._id}-out`,
+            type: "check-out",
+            timestamp: log.checkOutTime,
+            method: log.checkOutMethod || log.method,
+            checkInPhoto: undefined, // Only show check-out photo
+            // For check-out, show early status if applicable
+            status: log.isEarly ? "early" : "present",
+            isLate: false, // Check-out can't be late
+          })
+        }
+      })
+      
+      setAllLogs(expandedLogs)
+      setLogs(expandedLogs)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load logs")
     } finally {
@@ -171,20 +211,15 @@ export default function AttendancePage() {
     a.click()
   }
 
-  // Calculate stats from filtered logs
-  const checkIns = logs.filter((log) => log.type === "check-in")
-  const checkOuts = logs.filter((log) => log.type === "check-out")
-  const lateArrivals = logs.filter((log) => log.isLate || log.status === "late")
-  const earlyDepartures = logs.filter((log) => log.isEarly || log.status === "early")
-  const presentStaff = logs.filter((log) => log.type === "check-in" && !log.isLate && !log.isEarly)
+  // Calculate stats from ORIGINAL logs (before splitting into separate rows)
+  const checkIns = originalLogs.filter((log) => log.checkInTime)
+  const checkOuts = originalLogs.filter((log) => log.checkOutTime)
+  const lateArrivals = originalLogs.filter((log) => log.isLate === true)
+  const earlyDepartures = originalLogs.filter((log) => log.isEarly === true)
+  const presentStaff = originalLogs.filter((log) => log.checkInTime && !log.isLate)
   
   // Calculate currently in office (checked in but not checked out)
-  const staffWithCheckOut = new Set(
-    allLogs.filter(log => log.type === "check-out").map(log => log.staffId)
-  )
-  const currentlyIn = allLogs.filter(log => 
-    log.type === "check-in" && !staffWithCheckOut.has(log.staffId)
-  )
+  const currentlyIn = originalLogs.filter(log => log.checkInTime && !log.checkOutTime)
 
   return (
     <div className="space-y-6">
@@ -439,43 +474,27 @@ export default function AttendancePage() {
                       </td>
                       <td className="py-3 px-4">
                         {(log.checkInPhoto || log.checkOutPhoto) ? (
-                          <div className="flex gap-1">
-                            {log.checkInPhoto && (
-                              <div className="relative group">
-                                <img
-                                  src={getImageSrc(log.checkInPhoto)}
-                                  alt="Check-in photo"
-                                  className="w-10 h-10 rounded-lg object-cover cursor-pointer border-2 border-green-200 hover:border-green-400 transition-colors"
-                                  onClick={() => setSelectedPhoto({
-                                    photo: log.checkInPhoto!,
-                                    staffName: log.staffName,
-                                    type: "check-in",
-                                    timestamp: log.timestamp
-                                  })}
-                                />
-                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                  ↓
-                                </div>
-                              </div>
-                            )}
-                            {log.checkOutPhoto && (
-                              <div className="relative group">
-                                <img
-                                  src={getImageSrc(log.checkOutPhoto)}
-                                  alt="Check-out photo"
-                                  className="w-10 h-10 rounded-lg object-cover cursor-pointer border-2 border-blue-200 hover:border-blue-400 transition-colors"
-                                  onClick={() => setSelectedPhoto({
-                                    photo: log.checkOutPhoto!,
-                                    staffName: log.staffName,
-                                    type: "check-out",
-                                    timestamp: log.timestamp
-                                  })}
-                                />
-                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                  ↑
-                                </div>
-                              </div>
-                            )}
+                          <div className="relative group inline-block">
+                            <img
+                              src={getImageSrc(log.checkInPhoto || log.checkOutPhoto!)}
+                              alt={`${log.type} photo`}
+                              className={`w-10 h-10 rounded-lg object-cover cursor-pointer border-2 ${
+                                log.type === "check-in" 
+                                  ? "border-green-200 hover:border-green-400" 
+                                  : "border-blue-200 hover:border-blue-400"
+                              } transition-colors`}
+                              onClick={() => setSelectedPhoto({
+                                photo: (log.checkInPhoto || log.checkOutPhoto)!,
+                                staffName: log.staffName,
+                                type: log.type,
+                                timestamp: log.timestamp
+                              })}
+                            />
+                            <div className={`absolute -top-1 -right-1 w-4 h-4 ${
+                              log.type === "check-in" ? "bg-green-500" : "bg-blue-500"
+                            } text-white text-xs rounded-full flex items-center justify-center font-bold`}>
+                              {log.type === "check-in" ? "↓" : "↑"}
+                            </div>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1 text-gray-400 text-xs">

@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<any>(null)
   const [organization, setOrganization] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [attendanceOpen, setAttendanceOpen] = useState(true)
+  const [reportsOpen, setReportsOpen] = useState(true)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -94,10 +94,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const mainNavItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/dashboard/attendance", label: "Attendance", icon: Clock },
     { href: "/dashboard/staff", label: "Staff", icon: Users },
   ]
 
-  const attendanceItems = [
+  const reportsItems = [
     { href: "/dashboard/present", label: "Currently In", icon: UserCheck },
     { href: "/dashboard/absent", label: "Absent", icon: UserX },
     { href: "/dashboard/late", label: "Late Arrivals", icon: Clock },
@@ -178,27 +179,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )
             })}
 
-            {/* Attendance Section */}
+            {/* Reports Section */}
             <div className="pt-2">
               <button
-                onClick={() => setAttendanceOpen(!attendanceOpen)}
+                onClick={() => setReportsOpen(!reportsOpen)}
                 className="flex items-center justify-between w-full px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5" />
-                  <span className="font-medium">Attendance</span>
+                  <BarChart3 className="w-5 h-5" />
+                  <span className="font-medium">Reports</span>
                 </div>
-                {attendanceOpen ? (
+                {reportsOpen ? (
                   <ChevronDown className="w-4 h-4" />
                 ) : (
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
 
-              {/* Collapsible Attendance Items */}
-              {attendanceOpen && (
+              {/* Collapsible Reports Items */}
+              {reportsOpen && (
                 <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-4">
-                  {attendanceItems.map((item) => {
+                  {reportsItems.map((item) => {
                     const Icon = item.icon
                     const isActive = pathname === item.href
                     return (

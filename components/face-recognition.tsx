@@ -33,9 +33,15 @@ export function FaceRecognition({ onScan, onClose, mode, staffId }: FaceRecognit
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: 640,
-          height: 480,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           facingMode: "user",
+          // Request better lighting conditions
+          advanced: [
+            { exposureMode: "continuous" },
+            { whiteBalanceMode: "continuous" },
+            { focusMode: "continuous" }
+          ]
         },
       })
 
@@ -62,11 +68,33 @@ export function FaceRecognition({ onScan, onClose, mode, staffId }: FaceRecognit
 
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
+    
+    // Draw the video frame
     context.drawImage(video, 0, 0)
 
+    // Enhance brightness and contrast
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+    const data = imageData.data
+    
+    // Adjust brightness and contrast
+    const brightness = 20 // Increase brightness
+    const contrast = 30   // Increase contrast
+    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Apply brightness and contrast to RGB channels
+      data[i] = factor * (data[i] - 128) + 128 + brightness     // Red
+      data[i + 1] = factor * (data[i + 1] - 128) + 128 + brightness // Green
+      data[i + 2] = factor * (data[i + 2] - 128) + 128 + brightness // Blue
+      // Alpha channel (data[i + 3]) remains unchanged
+    }
+    
+    // Put the enhanced image back
+    context.putImageData(imageData, 0, 0)
+
     // Convert to base64
-    const imageData = canvas.toDataURL("image/jpeg", 0.8)
-    const faceImage = imageData.split(",")[1] // Remove data:image/jpeg;base64, prefix
+    const enhancedImageData = canvas.toDataURL("image/jpeg", 0.9)
+    const faceImage = enhancedImageData.split(",")[1] // Remove data:image/jpeg;base64, prefix
 
     try {
       if (mode === "register") {

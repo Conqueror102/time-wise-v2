@@ -40,7 +40,12 @@ export default function ActivitiesPage() {
   const fetchActivities = async () => {
     if (!loading) setRefreshing(true)
     try {
-      const response = await fetch("/api/owner/activities")
+      const token = localStorage.getItem("super_admin_token")
+      const response = await fetch("/api/owner/activities", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setActivities(data.activities)

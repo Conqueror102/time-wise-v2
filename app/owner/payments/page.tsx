@@ -58,9 +58,15 @@ export default function PaymentsPage() {
   const fetchPaymentData = async () => {
     setLoading(true)
     try {
+      const token = localStorage.getItem("super_admin_token")
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      }
+
       // Fetch transactions
       const transactionsRes = await fetch(
-        `/api/owner/payments/transactions?page=${page}`
+        `/api/owner/payments/transactions?page=${page}`,
+        { headers }
       )
       if (transactionsRes.ok) {
         const data = await transactionsRes.json()
@@ -69,7 +75,8 @@ export default function PaymentsPage() {
 
       // Fetch subscriptions
       const subscriptionsRes = await fetch(
-        `/api/owner/payments/subscriptions?page=${page}`
+        `/api/owner/payments/subscriptions?page=${page}`,
+        { headers }
       )
       if (subscriptionsRes.ok) {
         const data = await subscriptionsRes.json()
@@ -78,7 +85,8 @@ export default function PaymentsPage() {
 
       // Fetch webhook logs
       const webhookRes = await fetch(
-        `/api/owner/payments/webhook-logs?page=${page}`
+        `/api/owner/payments/webhook-logs?page=${page}`,
+        { headers }
       )
       if (webhookRes.ok) {
         const data = await webhookRes.json()

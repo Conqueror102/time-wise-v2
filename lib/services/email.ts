@@ -1,21 +1,21 @@
 /**
- * Email Service using Resend SDK
+ * Email Service using SendGrid
  * Handles OTP and transactional emails
  */
 
-import { Resend } from "resend"
+import sgMail from "@sendgrid/mail"
 
-// Lazy initialize Resend to avoid build-time errors
-let resend: Resend | null = null
-
-function getResendClient() {
-  if (!resend && process.env.RESEND_API_KEY) {
-    resend = new Resend(process.env.RESEND_API_KEY)
+// Initialize SendGrid
+function initializeSendGrid() {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (apiKey) {
+    sgMail.setApiKey(apiKey)
+    return true
   }
-  return resend
+  return false
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "TimeWise <onboarding@resend.dev>"
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "noreply@timewise.com"
 const APP_NAME = "TimeWise"
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
@@ -42,12 +42,11 @@ export async function sendOTPEmail({
   expiresInMinutes = 10,
 }: SendOTPEmailParams): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getResendClient()
-    if (!client) {
+    if (!initializeSendGrid()) {
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await client.emails.send({
+    await sgMail.send({
       from: FROM_EMAIL,
       to,
       subject: `${APP_NAME} - Verify Your Email`,
@@ -96,12 +95,7 @@ export async function sendOTPEmail({
       `,
     })
 
-    if (error) {
-      console.error("Resend email error:", error)
-      return { success: false, error: error.message }
-    }
-
-    console.log("OTP email sent successfully:", data?.id)
+    console.log("OTP email sent successfully to:", to)
     return { success: true }
   } catch (error) {
     console.error("Failed to send OTP email:", error)
@@ -123,12 +117,11 @@ export async function sendPasswordResetEmail({
   const resetUrl = `${APP_URL}/reset-password?token=${resetToken}`
 
   try {
-    const client = getResendClient()
-    if (!client) {
+    if (!initializeSendGrid()) {
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await client.emails.send({
+    await sgMail.send({
       from: FROM_EMAIL,
       to,
       subject: `${APP_NAME} - Reset Your Password`,
@@ -188,12 +181,7 @@ export async function sendPasswordResetEmail({
       `,
     })
 
-    if (error) {
-      console.error("Resend email error:", error)
-      return { success: false, error: error.message }
-    }
-
-    console.log("Password reset email sent successfully:", data?.id)
+    console.log("Password reset email sent successfully to:", to)
     return { success: true }
   } catch (error) {
     console.error("Failed to send password reset email:", error)
@@ -217,24 +205,18 @@ export async function sendEmail({
   html: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getResendClient()
-    if (!client) {
+    if (!initializeSendGrid()) {
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await client.emails.send({
+    await sgMail.send({
       from: FROM_EMAIL,
       to,
       subject,
       html,
     })
 
-    if (error) {
-      console.error("Resend email error:", error)
-      return { success: false, error: error.message }
-    }
-
-    console.log("Email sent successfully:", data?.id)
+    console.log("Email sent successfully to:", to)
     return { success: true }
   } catch (error) {
     console.error("Failed to send email:", error)
@@ -254,12 +236,11 @@ export async function sendWelcomeEmail(
   organizationName: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const client = getResendClient()
-    if (!client) {
+    if (!initializeSendGrid()) {
       return { success: false, error: "Email service not configured" }
     }
 
-    const { data, error } = await client.emails.send({
+    await sgMail.send({
       from: FROM_EMAIL,
       to,
       subject: `Welcome to ${APP_NAME}! 🎉`,
@@ -302,11 +283,7 @@ export async function sendWelcomeEmail(
       `,
     })
 
-    if (error) {
-      console.error("Resend email error:", error)
-      return { success: false, error: error.message }
-    }
-
+    console.log("Welcome email sent successfully to:", to)
     return { success: true }
   } catch (error) {
     console.error("Failed to send welcome email:", error)

@@ -36,21 +36,22 @@ export async function GET(request: NextRequest) {
       date: { $gte: startDateStr },
     })
 
-    // Calculate stats
-    const totalAttendance = attendanceRecords.length
-    const lateArrivals = attendanceRecords.filter((r) => r.isLate).length
-    const earlyDepartures = attendanceRecords.filter((r) => r.isEarly).length
+    // Calculate stats - only count records with actual check-ins
+    const recordsWithCheckIn = attendanceRecords.filter((r) => r.checkInTime)
+    const totalAttendance = recordsWithCheckIn.length
+    const lateArrivals = attendanceRecords.filter((r) => r.checkInTime && r.isLate === true).length
+    const earlyDepartures = attendanceRecords.filter((r) => r.checkOutTime && r.isEarly === true).length
 
     // Calculate average attendance rate
-    const uniqueStaffAttended = new Set(attendanceRecords.map((r) => r.staffId)).size
+    const uniqueStaffAttended = new Set(recordsWithCheckIn.map((r) => r.staffId)).size
     const averageAttendanceRate = totalStaff > 0 ? Math.round((uniqueStaffAttended / totalStaff) * 100) : 0
 
     // Calculate absentees (staff who haven't checked in today)
     const today = new Date().toISOString().split("T")[0]
-    const todayAttendance = await tenantDb.count<AttendanceLog>("attendance", {
+    const todayRecords = await tenantDb.find<AttendanceLog>("attendance", {
       date: today,
-      type: "check-in",
     })
+    const todayAttendance = todayRecords.filter((r) => r.checkInTime).length
     const absentees = totalStaff - todayAttendance
 
     // Calculate trends (compare with previous period)
@@ -60,13 +61,15 @@ export async function GET(request: NextRequest) {
       date: { $gte: previousStartDateStr, $lt: startDateStr },
     })
 
+    const previousRecordsWithCheckIn = previousRecords.filter((r) => r.checkInTime)
     const previousAttendanceRate = totalStaff > 0
-      ? (new Set(previousRecords.map((r) => r.staffId)).size / totalStaff) * 100
+      ? (new Set(previousRecordsWithCheckIn.map((r) => r.staffId)).size / totalStaff) * 100
       : 0
     const attendanceTrend = averageAttendanceRate - previousAttendanceRate
 
-    const previousLateRate = previousRecords.length > 0
-      ? (previousRecords.filter((r) => r.isLate).length / previousRecords.length) * 100
+    const previousLateCount = previousRecords.filter((r) => r.checkInTime && r.isLate === true).length
+    const previousLateRate = previousRecordsWithCheckIn.length > 0
+      ? (previousLateCount / previousRecordsWithCheckIn.length) * 100
       : 0
     const currentLateRate = totalAttendance > 0 ? (lateArrivals / totalAttendance) * 100 : 0
     const latenessTrend = currentLateRate - previousLateRate

@@ -45,14 +45,18 @@ export async function GET(request: NextRequest) {
           absent: 0,
         }
       }
-      if (record.type === "check-in") dataByDate[date].checkIns++
-      if (record.type === "check-out") dataByDate[date].checkOuts++
-      if (record.type === "check-in") {
-        if (record.isLate) {
+      // Count check-ins
+      if (record.checkInTime) {
+        dataByDate[date].checkIns++
+        if (record.isLate === true) {
           dataByDate[date].late++
         } else {
           dataByDate[date].onTime++
         }
+      }
+      // Count check-outs
+      if (record.checkOutTime) {
+        dataByDate[date].checkOuts++
       }
     })
 
@@ -90,9 +94,9 @@ export async function GET(request: NextRequest) {
     records.forEach((record) => {
       const recordDate = new Date(record.date)
       const dayOfWeek = recordDate.getDay()
-      if (recordDate >= oneWeekAgo && record.type === "check-in") {
+      if (recordDate >= oneWeekAgo && record.checkInTime) {
         thisWeek[dayOfWeek]++
-      } else if (recordDate >= twoWeeksAgo && recordDate < oneWeekAgo && record.type === "check-in") {
+      } else if (recordDate >= twoWeeksAgo && recordDate < oneWeekAgo && record.checkInTime) {
         lastWeek[dayOfWeek]++
       }
     })

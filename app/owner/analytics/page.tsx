@@ -41,7 +41,12 @@ export default function AnalyticsPage() {
 
   const fetchAnalytics = async () => {
     try {
-      const response = await fetch("/api/owner/analytics/system")
+      const token = localStorage.getItem("super_admin_token")
+      const response = await fetch("/api/owner/analytics/system", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setAnalytics(data)

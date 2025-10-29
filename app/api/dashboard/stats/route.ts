@@ -22,31 +22,27 @@ export async function GET(request: NextRequest) {
     // Get total staff count
     const totalStaff = await tenantDb.count<Staff>("staff", { isActive: true })
 
-    // Get today's check-ins
-    const checkedInToday = await tenantDb.find<AttendanceLog>("attendance", {
+    // Get today's attendance records
+    const todayAttendance = await tenantDb.find<AttendanceLog>("attendance", {
       date: today,
-      type: "check-in",
     })
+
+    // Get staff who checked in (have checkInTime)
+    const checkedInToday = todayAttendance.filter((log) => log.checkInTime)
 
     // Get current staff (checked in but not checked out)
-    const checkedOutToday = await tenantDb.find<AttendanceLog>("attendance", {
-      date: today,
-      type: "check-out",
-    })
+    const currentStaff = todayAttendance.filter((log) => log.checkInTime && !log.checkOutTime)
 
-    const checkedOutStaffIds = new Set(checkedOutToday.map((log) => log.staffId))
-    const currentStaff = checkedInToday.filter((log) => !checkedOutStaffIds.has(log.staffId))
-
-    // Get late arrivals today
-    const lateToday = checkedInToday.filter((log) => log.isLate)
+    // Get late arrivals today (only those who actually checked in late)
+    const lateToday = todayAttendance.filter((log) => log.checkInTime && log.isLate === true)
 
     // Get absent staff
     const checkedInStaffIds = new Set(checkedInToday.map((log) => log.staffId))
     const allStaff = await tenantDb.find<Staff>("staff", { isActive: true })
     const absentStaff = allStaff.filter((staff) => !checkedInStaffIds.has(staff.staffId))
 
-    // Get early departures today
-    const earlyDepartures = checkedOutToday.filter((log) => log.isEarly)
+    // Get early departures today (only those who actually checked out early)
+    const earlyDepartures = todayAttendance.filter((log) => log.checkOutTime && log.isEarly === true)
 
     return NextResponse.json({
       success: true,
@@ -62,7 +58,7 @@ export async function GET(request: NextRequest) {
         staffId: log.staffId,
         name: log.staffName,
         department: log.department,
-        checkInTime: log.timestamp,
+        checkInTime: log.checkInTime || log.timestamp,
         isLate: log.isLate,
       })),
       absentStaff: absentStaff.map((staff) => ({
@@ -74,7 +70,7 @@ export async function GET(request: NextRequest) {
         staffId: log.staffId,
         name: log.staffName,
         department: log.department,
-        checkOutTime: log.timestamp,
+        checkOutTime: log.checkOutTime || log.timestamp,
         isEarly: log.isEarly,
       })),
     })

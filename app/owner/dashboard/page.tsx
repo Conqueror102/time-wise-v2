@@ -40,7 +40,12 @@ export default function OwnerDashboardPage() {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await fetch("/api/owner/analytics/overview")
+      const token = localStorage.getItem("super_admin_token")
+      const response = await fetch("/api/owner/analytics/overview", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -54,10 +59,15 @@ export default function OwnerDashboardPage() {
 
   const fetchChartData = async () => {
     try {
+      const token = localStorage.getItem("super_admin_token")
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      }
+
       const [revenueRes, growthRes, distributionRes] = await Promise.all([
-        fetch("/api/owner/analytics/revenue?period=month"),
-        fetch("/api/owner/analytics/growth"),
-        fetch("/api/owner/analytics/distribution"),
+        fetch("/api/owner/analytics/revenue?period=month", { headers }),
+        fetch("/api/owner/analytics/growth", { headers }),
+        fetch("/api/owner/analytics/distribution", { headers }),
       ])
 
       if (revenueRes.ok) {

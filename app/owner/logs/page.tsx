@@ -43,13 +43,18 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     setLoading(true)
     try {
+      const token = localStorage.getItem("super_admin_token")
       const params = new URLSearchParams({
         page: page.toString(),
         ...(search && { search }),
         ...(actionFilter && actionFilter !== "all" && { action: actionFilter }),
       })
 
-      const response = await fetch(`/api/owner/logs?${params}`)
+      const response = await fetch(`/api/owner/logs?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setLogs(data.logs)
@@ -65,12 +70,17 @@ export default function AuditLogsPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
+      const token = localStorage.getItem("super_admin_token")
       const params = new URLSearchParams({
         ...(search && { search }),
         ...(actionFilter && actionFilter !== "all" && { action: actionFilter }),
       })
 
-      const response = await fetch(`/api/owner/logs/export?${params}`)
+      const response = await fetch(`/api/owner/logs/export?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)

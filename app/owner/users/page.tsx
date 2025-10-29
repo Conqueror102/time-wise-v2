@@ -40,12 +40,17 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
+      const token = localStorage.getItem("super_admin_token")
       const params = new URLSearchParams({
         page: page.toString(),
         ...(search && { search }),
       })
 
-      const response = await fetch(`/api/owner/users?${params}`)
+      const response = await fetch(`/api/owner/users?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setUsers(data.users)

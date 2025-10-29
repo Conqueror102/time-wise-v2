@@ -47,18 +47,23 @@ export async function GET(request: NextRequest) {
     // Calculate metrics for each staff member
     const staffData = allStaff.map((member) => {
       const attendance = staffAttendanceMap[member.staffId] || []
-      const checkIns = attendance.filter((a) => a.type === "check-in")
+      
+      // Filter for actual check-ins (records with checkInTime)
+      const checkIns = attendance.filter((a) => a.checkInTime)
       const totalAttendance = checkIns.length
-      const lateCount = checkIns.filter((a) => a.isLate).length
+      const lateCount = attendance.filter((a) => a.checkInTime && a.isLate === true).length
 
+      // Attendance rate: (days attended / total days) × 100
       const attendanceRate = days > 0
         ? Math.round((totalAttendance / days) * 100)
         : 0
 
+      // Punctuality score: (on-time arrivals / total check-ins) × 100
       const punctualityScore = totalAttendance > 0
         ? Math.round(((totalAttendance - lateCount) / totalAttendance) * 100)
         : 100
 
+      // Determine status based on both metrics
       let status = "Poor"
       if (attendanceRate >= 90 && punctualityScore >= 90) status = "Excellent"
       else if (attendanceRate >= 75 && punctualityScore >= 75) status = "Good"

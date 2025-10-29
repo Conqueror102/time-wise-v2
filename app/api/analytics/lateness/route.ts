@@ -27,17 +27,16 @@ export async function GET(request: NextRequest) {
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Get late attendance records
-    const lateRecords = await tenantDb.find<AttendanceLog>("attendance", {
+    // Get all attendance records in range
+    const allRecords = await tenantDb.find<AttendanceLog>("attendance", {
       date: { $gte: startDateStr },
-      type: "check-in",
-      isLate: true,
     })
 
-    const totalRecords = await tenantDb.count<AttendanceLog>("attendance", {
-      date: { $gte: startDateStr },
-      type: "check-in",
-    })
+    // Filter for late records (must have checkInTime and isLate === true)
+    const lateRecords = allRecords.filter((r) => r.checkInTime && r.isLate === true)
+
+    // Count total check-ins
+    const totalRecords = allRecords.filter((r) => r.checkInTime).length
 
     // Calculate distribution by delay duration
     const distribution = [0, 0, 0, 0] // 0-15, 15-30, 30-60, 60+
@@ -74,16 +73,12 @@ export async function GET(request: NextRequest) {
     // Calculate trend
     const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000)
     const previousStartDateStr = previousStartDate.toISOString().split("T")[0]
-    const previousLateCount = await tenantDb.count<AttendanceLog>("attendance", {
+    const previousRecords = await tenantDb.find<AttendanceLog>("attendance", {
       date: { $gte: previousStartDateStr, $lt: startDateStr },
-      type: "check-in",
-      isLate: true,
     })
 
-    const previousTotal = await tenantDb.count<AttendanceLog>("attendance", {
-      date: { $gte: previousStartDateStr, $lt: startDateStr },
-      type: "check-in",
-    })
+    const previousLateCount = previousRecords.filter((r) => r.checkInTime && r.isLate === true).length
+    const previousTotal = previousRecords.filter((r) => r.checkInTime).length
 
     const currentRate = totalRecords > 0 ? (lateRecords.length / totalRecords) * 100 : 0
     const previousRate = previousTotal > 0 ? (previousLateCount / previousTotal) * 100 : 0
@@ -95,7 +90,7 @@ export async function GET(request: NextRequest) {
       department: record.department || "N/A",
       date: record.date,
       expectedTime: "09:00 AM", // Placeholder - get from shift settings
-      actualTime: new Date(record.timestamp).toLocaleTimeString("en-US", {
+      actualTime: new Date(record.checkInTime || record.timestamp).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
       }),

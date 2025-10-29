@@ -65,20 +65,37 @@ export async function GET(request: NextRequest) {
     // Calculate metrics for each department
     const departmentData = Object.values(departmentMap).map((dept) => {
       const staffCount = dept.staff.length
-      const checkIns = dept.attendance.filter((a) => a.type === "check-in")
+      
+      // Filter for actual check-ins (records with checkInTime)
+      const checkIns = dept.attendance.filter((a) => a.checkInTime)
       const totalAttendance = checkIns.length
-      const lateCount = checkIns.filter((a) => a.isLate).length
+      const lateCount = dept.attendance.filter((a) => a.checkInTime && a.isLate === true).length
 
+      // Calculate attendance rate: (total check-ins) / (staff count × days in range) × 100
       const attendanceRate = staffCount > 0 && days > 0
         ? Math.round((totalAttendance / (staffCount * days)) * 100)
         : 0
 
+      // Calculate punctuality score: (on-time check-ins) / (total check-ins) × 100
       const punctualityScore = totalAttendance > 0
         ? Math.round(((totalAttendance - lateCount) / totalAttendance) * 100)
         : 100
 
-      // Calculate trend (simplified)
-      const trend = Math.floor(Math.random() * 20) - 10 // Placeholder
+      // Calculate trend by comparing with previous period
+      const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000)
+      const previousStartDateStr = previousStartDate.toISOString().split("T")[0]
+      const previousRecords = attendanceRecords.filter((r) => 
+        r.department === dept.name && 
+        r.date >= previousStartDateStr && 
+        r.date < startDateStr &&
+        r.checkInTime
+      )
+      const previousLateCount = previousRecords.filter((r) => r.isLate === true).length
+      const previousPunctuality = previousRecords.length > 0
+        ? ((previousRecords.length - previousLateCount) / previousRecords.length) * 100
+        : 100
+      
+      const trend = Math.round((punctualityScore - previousPunctuality) * 10) / 10
 
       return {
         name: dept.name,

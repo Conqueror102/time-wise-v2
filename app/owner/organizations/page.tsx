@@ -41,12 +41,17 @@ export default function OrganizationsPage() {
   const fetchOrganizations = async () => {
     setLoading(true)
     try {
+      const token = localStorage.getItem("super_admin_token")
       const params = new URLSearchParams({
         page: page.toString(),
         ...(search && { search }),
       })
 
-      const response = await fetch(`/api/owner/organizations?${params}`)
+      const response = await fetch(`/api/owner/organizations?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (response.ok) {
         const data = await response.json()
         setOrganizations(data.organizations)

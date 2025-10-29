@@ -69,7 +69,17 @@ export function useCheckin(tenantId: string) {
       }
 
       navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" }
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "user",
+          // Request better lighting conditions
+          advanced: [
+            { exposureMode: "continuous" },
+            { whiteBalanceMode: "continuous" },
+            { focusMode: "continuous" }
+          ]
+        }
       }).then((mediaStream) => {
         stream = mediaStream
         const video = document.createElement('video')
@@ -78,18 +88,43 @@ export function useCheckin(tenantId: string) {
         video.playsInline = true
         video.muted = true
 
+        // Wait for video to actually start playing, not just metadata loaded
         video.onloadedmetadata = () => {
-          setTimeout(() => {
-            const canvas = document.createElement('canvas')
-            const context = canvas.getContext('2d')
+          video.play().then(() => {
+            // Give camera more time to adjust exposure and focus (3.5 seconds)
+            setTimeout(() => {
+              const canvas = document.createElement('canvas')
+              const context = canvas.getContext('2d')
 
-            if (context) {
-              canvas.width = video.videoWidth
-              canvas.height = video.videoHeight
-              context.drawImage(video, 0, 0)
+              if (context) {
+                canvas.width = video.videoWidth
+                canvas.height = video.videoHeight
+                
+                // Draw the video frame
+                context.drawImage(video, 0, 0)
 
-              const imageData = canvas.toDataURL('image/jpeg', 0.7)
-              const base64 = imageData.split(',')[1]
+              // Enhance brightness and contrast
+              const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+              const data = imageData.data
+              
+              // Adjust brightness and contrast
+              const brightness = 25 // Increase brightness
+              const contrast = 35   // Increase contrast
+              const factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
+              
+              for (let i = 0; i < data.length; i += 4) {
+                // Apply brightness and contrast to RGB channels
+                data[i] = factor * (data[i] - 128) + 128 + brightness     // Red
+                data[i + 1] = factor * (data[i + 1] - 128) + 128 + brightness // Green
+                data[i + 2] = factor * (data[i + 2] - 128) + 128 + brightness // Blue
+                // Alpha channel (data[i + 3]) remains unchanged
+              }
+              
+              // Put the enhanced image back
+              context.putImageData(imageData, 0, 0)
+
+              const enhancedImageData = canvas.toDataURL('image/jpeg', 0.85)
+              const base64 = enhancedImageData.split(',')[1]
 
               cleanup()
               resolve(base64)
@@ -97,7 +132,18 @@ export function useCheckin(tenantId: string) {
               cleanup()
               resolve(null)
             }
-          }, 2000)
+            }, 3500) // Increased from 2000ms to 3500ms for better camera adjustment
+          }).catch((playError) => {
+            console.error('Video play error:', playError)
+            cleanup()
+            resolve(null)
+          })
+        }
+
+        video.onerror = (err) => {
+          console.error('Video error:', err)
+          cleanup()
+          resolve(null)
         }
       }).catch((err) => {
         console.error('Camera access failed:', err)
