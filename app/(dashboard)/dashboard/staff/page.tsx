@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { canAddStaff, PLAN_FEATURES, type PlanType } from "@/lib/features/feature-manager"
+import { useToast } from "@/hooks/use-toast"
+import { Toaster } from "@/components/ui/toaster"
 import {
   Dialog,
   DialogContent,
@@ -34,6 +36,7 @@ interface Staff {
 }
 
 export default function StaffPage() {
+  const { toast } = useToast()
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -97,9 +100,24 @@ export default function StaffPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to register staff")
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.error || `Failed to register staff (${response.status})`
+        console.log("API Error:", errorMessage)
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: errorMessage,
+        })
+        setError(errorMessage)
+        setLoading(false)
+        return // Don't throw, just return to prevent catch block
       }
 
+      const data = await response.json()
+      toast({
+        title: "Success!",
+        description: `${formData.name} has been registered successfully.`,
+      })
       setShowAddDialog(false)
       setFormData({ name: "", email: "", department: "", position: "" })
       fetchStaff()
@@ -193,8 +211,10 @@ export default function StaffPage() {
     : 10
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <>
+      <Toaster />
+      <div className="space-y-6">
+        {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Staff Management</h1>
@@ -473,5 +493,6 @@ export default function StaffPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   )
 }
