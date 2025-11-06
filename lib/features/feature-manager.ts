@@ -5,7 +5,7 @@
 
 import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 
-export type PlanType = "free_trial" | "starter" | "professional" | "enterprise"
+export type PlanType = "free_trial" | "starter" | "professional" | "enterprise" | "free"
 
 export interface PlanFeatures {
   maxStaff: number
@@ -25,6 +25,22 @@ export interface PlanFeatures {
 
 export const PLAN_FEATURES: Record<PlanType, PlanFeatures> = {
   free_trial: {
+    maxStaff: 10,
+    qrCheckIn: true,
+    manualCheckIn: true,
+    fingerprintCheckIn: true,
+    faceCheckIn: true,
+    basicReports: true,
+    advancedAnalytics: false,
+    exportData: false,
+    photoVerification: true,
+    apiAccess: false,
+    customBranding: false,
+    prioritySupport: false,
+    dedicatedSupport: false,
+  },
+  free: {
+    // Legacy plan type - same as free_trial
     maxStaff: 10,
     qrCheckIn: true,
     manualCheckIn: true,

@@ -38,13 +38,13 @@ export interface Organization {
   subdomain: string
   adminEmail: string
   status: OrganizationStatus
-  subscriptionTier: "free" | "basic" | "premium" | "enterprise"
+  subscriptionTier: "free" | "free_trial" | "starter" | "professional" | "enterprise"
   subscriptionStatus: "active" | "trial" | "cancelled"
   createdAt: Date
   updatedAt?: Date
   trialEndsAt?: Date
   settings?: OrganizationSettings
-  allowedMethods: AuthMethod[]
+  allowedMethods?: AuthMethod[]
 }
 
 export interface User {

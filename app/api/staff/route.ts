@@ -9,6 +9,10 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, RegisterStaffRequest, TenantError } from "@/lib/types"
+import { canAddStaff, PLAN_FEATURES } from "@/lib/features/feature-manager"
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * Generate unique staff ID within tenant
@@ -51,8 +55,6 @@ function generateQRData(tenantId: string, staffId: string): string {
 /**
  * GET - List all staff members for authenticated tenant
  */
-export const dynamic = 'force-dynamic'
-
 export async function GET(request: NextRequest) {
   try {
     const context = await withAuth(request, {
@@ -115,8 +117,6 @@ export async function POST(request: NextRequest) {
     // Check staff limit (unless in development mode)
     const isDevelopment = process.env.NODE_ENV === "development"
     if (!isDevelopment) {
-      const { canAddStaff, PLAN_FEATURES } = await import("@/lib/features/feature-manager")
-      
       // Get organization to check subscription tier
       const organization = await tenantDb.findOne("organizations", { _id: context.tenantId })
       if (!organization) {

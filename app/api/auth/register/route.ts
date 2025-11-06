@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
       updatedAt: new Date(),
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
+      allowedMethods: ["qr", "manual"],
       settings: {
         latenessTime: "09:00",
         workStartTime: "09:00",
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
       firstName,
       lastName,
       isActive: true,
+      emailVerified: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
