@@ -95,6 +95,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
       )
 
       // Save to database
+      console.log("Registering credential ID:", credentialId)
       const response = await fetch("/api/biometric/fingerprint/register", {
         method: "POST",
         headers: {
@@ -146,6 +147,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
       const signature = btoa(String.fromCharCode(...new Uint8Array(assertionResponse.signature)))
 
       // Verify with database
+      console.log("Authenticating with credential ID:", credentialId)
       const response = await fetch("/api/biometric/fingerprint/authenticate", {
         method: "POST",
         headers: {
@@ -161,7 +163,9 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
       })
 
       if (!response.ok) {
-        throw new Error("Fingerprint not recognized")
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Authentication failed:", errorData)
+        throw new Error(errorData.error || "Fingerprint not recognized")
       }
 
       const data = await response.json()
