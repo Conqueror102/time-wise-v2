@@ -5,11 +5,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, RegisterStaffRequest, TenantError } from "@/lib/types"
 import { canAddStaff, PLAN_FEATURES } from "@/lib/features/feature-manager"
+import { generateQRCode } from "@/lib/utils/qr-generator"
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,7 +30,7 @@ async function generateUniqueStaffId(tenantDb: any, prefix: string = "STAFF"): P
     const random = Math.floor(1000 + Math.random() * 9000)
     staffId = `${prefix}${random}`
     
-    const existingStaff = await tenantDb.findOne<Staff>("staff", { staffId })
+    const existingStaff = await tenantDb.findOne("staff", { staffId })
     exists = !!existingStaff
     attempts++
   }
@@ -118,7 +120,7 @@ export async function POST(request: NextRequest) {
     const isDevelopment = process.env.NODE_ENV === "development"
     if (!isDevelopment) {
       // Get organization to check subscription tier
-      const organization = await tenantDb.findOne("organizations", { _id: context.tenantId })
+      const organization = await db.collection("organizations").findOne({ _id: new ObjectId(context.tenantId) })
       if (!organization) {
         return NextResponse.json(
           { error: "Organization not found" },
@@ -130,11 +132,12 @@ export async function POST(request: NextRequest) {
       const currentStaffCount = await tenantDb.count("staff", {})
       
       // Check if can add more staff
-      if (!canAddStaff(organization.subscriptionTier, currentStaffCount, isDevelopment)) {
-        const maxStaff = PLAN_FEATURES[organization.subscriptionTier]?.maxStaff || 10
+      const subscriptionTier = (organization?.subscriptionTier || "free") as "free" | "free_trial" | "starter" | "professional" | "enterprise"
+      if (!canAddStaff(subscriptionTier, currentStaffCount, isDevelopment)) {
+        const maxStaff = PLAN_FEATURES[subscriptionTier]?.maxStaff || 10
         return NextResponse.json(
           { 
-            error: `Staff limit reached. Your ${organization.subscriptionTier} plan allows up to ${maxStaff} staff members. Please upgrade to add more.`,
+            error: `Staff limit reached. Your ${subscriptionTier} plan allows up to ${maxStaff} staff members. Please upgrade to add more.`,
             code: "STAFF_LIMIT_REACHED"
           },
           { status: 403 }
@@ -159,8 +162,7 @@ export async function POST(request: NextRequest) {
     // Generate QR code data
     const qrData = generateQRData(context.tenantId, staffId)
 
-    // Import QR code generator
-    const { generateQRCode } = await import("@/lib/utils/qr-generator")
+    // Generate QR code
     const qrCode = await generateQRCode(qrData)
 
     // Create staff member
