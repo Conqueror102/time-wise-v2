@@ -70,6 +70,8 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
         authenticatorSelection: {
           authenticatorAttachment: "platform",
           userVerification: "required",
+          residentKey: "required",
+          requireResidentKey: true,
         },
         timeout: 60000,
         attestation: "direct",
