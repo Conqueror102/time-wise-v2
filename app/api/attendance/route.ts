@@ -34,6 +34,8 @@ function isLateCheckIn(timestamp: Date, latenessTime: string): boolean {
 /**
  * POST - Check in or check out
  */
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const context = await withAuth(request)

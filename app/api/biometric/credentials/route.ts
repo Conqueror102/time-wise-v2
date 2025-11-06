@@ -9,6 +9,8 @@ import { withAuth } from "@/lib/auth"
 import { Staff, TenantError } from "@/lib/types"
 
 // Get staff biometric credentials
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const context = await withAuth(request, {

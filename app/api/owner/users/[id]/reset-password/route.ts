@@ -15,6 +15,8 @@ function generateRandomPassword(length: number = 12): string {
   return password
 }
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

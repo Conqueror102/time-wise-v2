@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { generateQRCode } from "@/lib/utils/qr-generator"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { name, department, position } = await request.json()

@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { Staff } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)

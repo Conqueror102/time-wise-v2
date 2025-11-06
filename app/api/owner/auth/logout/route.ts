@@ -8,6 +8,8 @@ import { withSuperAdminAuth } from "@/lib/auth/super-admin"
 import { getDatabase } from "@/lib/mongodb"
 import { SuperAdminError, createDatabaseError } from "@/lib/errors/super-admin-errors"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     // Authenticate super admin

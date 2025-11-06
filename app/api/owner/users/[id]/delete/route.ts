@@ -3,6 +3,8 @@ import { withSuperAdminAuth } from "@/lib/auth/super-admin"
 import { UserManagementService } from "@/lib/services/user-management"
 import { getIpAddress, getUserAgent } from "@/lib/utils/request"
 
+export const dynamic = 'force-dynamic'
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

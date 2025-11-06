@@ -5,6 +5,8 @@ import { ObjectId } from "mongodb"
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Get token from Authorization header

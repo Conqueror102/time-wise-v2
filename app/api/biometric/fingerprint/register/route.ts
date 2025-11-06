@@ -9,6 +9,8 @@ import { Staff, BiometricCredential } from "@/lib/types"
 import { verifyRegistrationResponse } from "@simplewebauthn/server"
 import type { VerifyRegistrationResponseOpts } from "@simplewebauthn/server"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { 

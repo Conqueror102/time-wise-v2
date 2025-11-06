@@ -11,6 +11,8 @@ import { updateSubscriptionAfterPayment } from "@/lib/subscription/subscription-
 import { PLAN_PRICES } from "@/lib/features/feature-manager"
 import { TenantError } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const context = await withAuth(request, {

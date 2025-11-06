@@ -3,6 +3,8 @@ import { withSuperAdminAuth } from "@/lib/auth/super-admin"
 import { AnalyticsService } from "@/lib/services/analytics"
 import { TimePeriod } from "@/lib/types/super-admin"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate super admin

@@ -13,6 +13,8 @@ import {
   createNotFoundError,
 } from "@/lib/errors/super-admin-errors"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate super admin

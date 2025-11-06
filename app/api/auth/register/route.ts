@@ -10,6 +10,8 @@ import { validateSubdomain, validateEmail, sanitizeOrganizationName } from "@/li
 import { RegisterOrganizationRequest, Organization, User, TenantError, ErrorCodes } from "@/lib/types"
 import { ObjectId } from "mongodb"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const body: RegisterOrganizationRequest = await request.json()

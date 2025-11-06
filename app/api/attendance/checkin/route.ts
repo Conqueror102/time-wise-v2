@@ -14,6 +14,8 @@ import {
   isCloudinaryConfigured,
 } from "@/lib/services/cloudinary"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { staffId, type, tenantId, photo, method } = await request.json()

@@ -8,6 +8,8 @@ import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, TenantError } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { staffId: string } }

@@ -8,6 +8,8 @@ import { withAuth } from "@/lib/auth"
 import { User, Organization, TenantError } from "@/lib/types"
 import { ObjectId } from "mongodb"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate request

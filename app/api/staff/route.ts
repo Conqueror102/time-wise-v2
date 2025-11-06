@@ -51,6 +51,8 @@ function generateQRData(tenantId: string, staffId: string): string {
 /**
  * GET - List all staff members for authenticated tenant
  */
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const context = await withAuth(request, {

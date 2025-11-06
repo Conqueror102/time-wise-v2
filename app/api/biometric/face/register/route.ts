@@ -7,6 +7,8 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { Staff, FaceData } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { staffId, faceImage, faceEmbedding, tenantId } = await request.json()

@@ -9,6 +9,8 @@ import { Staff } from "@/lib/types"
 import { verifyAuthenticationResponse } from "@simplewebauthn/server"
 import type { VerifyAuthenticationResponseOpts } from "@simplewebauthn/server"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { 

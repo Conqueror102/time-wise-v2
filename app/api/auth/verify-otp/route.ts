@@ -7,6 +7,8 @@ import { getDatabase } from "@/lib/mongodb"
 import { validateOTP } from "@/lib/services/otp"
 import { sendWelcomeEmail } from "@/lib/services/email"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { email, otp } = await request.json()

@@ -12,6 +12,8 @@ import type { PaystackWebhook } from "@/lib/types/super-admin"
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     // Get raw body for signature verification

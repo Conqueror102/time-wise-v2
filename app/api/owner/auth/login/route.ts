@@ -14,6 +14,8 @@ import {
   createValidationError,
 } from "@/lib/errors/super-admin-errors"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     // Parse request body

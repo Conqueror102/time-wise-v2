@@ -8,6 +8,8 @@ import { getDatabase } from "@/lib/mongodb"
 import { withAuth } from "@/lib/auth"
 import { TenantError } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(request: NextRequest) {
   try {
     const context = await withAuth(request, {

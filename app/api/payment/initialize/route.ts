@@ -10,6 +10,8 @@ import { PLAN_PRICES } from "@/lib/features/feature-manager"
 import { getSubscription } from "@/lib/subscription/subscription-manager"
 import { TenantError } from "@/lib/types"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const context = await withAuth(request, {

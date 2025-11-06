@@ -8,6 +8,8 @@ import { createResetTokenData, checkRateLimit } from "@/lib/services/otp"
 import { sendPasswordResetEmail } from "@/lib/services/email"
 import { validateEmail } from "@/lib/database/validation"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
     try {
         const { email } = await request.json()

@@ -3,6 +3,8 @@ import { getDatabase } from "@/lib/mongodb"
 import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 import { ObjectId } from "mongodb"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)

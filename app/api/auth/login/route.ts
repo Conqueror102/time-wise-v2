@@ -9,6 +9,8 @@ import { LoginRequest, User, Organization, TenantError, ErrorCodes } from "@/lib
 import { ObjectId } from "mongodb"
 import { withErrorHandler } from "@/lib/middleware/error-handler"
 
+export const dynamic = 'force-dynamic'
+
 export const POST = withErrorHandler(async (request: NextRequest) => {
   try {
     const body: LoginRequest = await request.json()
