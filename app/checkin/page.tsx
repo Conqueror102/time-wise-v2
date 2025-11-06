@@ -19,6 +19,8 @@ import { SuccessMessage } from "@/components/checkin/success-message"
 import { ManualEntryTab } from "@/components/checkin/manual-entry-tab"
 import { QRScannerTab } from "@/components/checkin/qr-scanner-tab"
 import { useCheckin } from "@/hooks/use-checkin"
+import { useToast } from "@/hooks/use-toast"
+import { Toaster } from "@/components/ui/toaster"
 
 export default function CheckInPage() {
   // Core state
@@ -34,6 +36,9 @@ export default function CheckInPage() {
   const [scannerClosing, setScannerClosing] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
+
+  // Toast notifications
+  const { toast } = useToast()
 
   // Use custom hook for check-in logic
   const {
@@ -77,8 +82,11 @@ export default function CheckInPage() {
 
       // Validate staff ID
       if (!decodedStaffId || decodedStaffId.length === 0) {
-        setMessage("Invalid QR code: No staff ID found")
-        setMessageType("error")
+        toast({
+          variant: "destructive",
+          title: "Invalid QR Code",
+          description: "No staff ID found in QR code",
+        })
         setShowScanner(false)
         setScannerKey((prev) => prev + 1)
         return
@@ -88,8 +96,11 @@ export default function CheckInPage() {
       const finalStaffId = decodedStaffId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
 
       if (!finalStaffId || finalStaffId.length === 0) {
-        setMessage("Invalid QR code: Invalid staff ID format")
-        setMessageType("error")
+        toast({
+          variant: "destructive",
+          title: "Invalid QR Code",
+          description: "Invalid staff ID format",
+        })
         setShowScanner(false)
         setScannerKey((prev) => prev + 1)
         return
@@ -99,8 +110,10 @@ export default function CheckInPage() {
       setStaffId(finalStaffId)
       setShowScanner(false)
       setScannerKey((prev) => prev + 1)
-      setMessage("QR code scanned successfully!")
-      setMessageType("success")
+      toast({
+        title: "QR Code Scanned",
+        description: `Staff ID: ${finalStaffId}`,
+      })
 
       // Check attendance status
       await checkAttendanceStatus(finalStaffId)
@@ -118,8 +131,11 @@ export default function CheckInPage() {
       }, 500)
     } catch (err) {
       console.error("QR scan error:", err)
-      setMessage("Failed to process QR code. Please try again.")
-      setMessageType("error")
+      toast({
+        variant: "destructive",
+        title: "Scan Failed",
+        description: "Failed to process QR code. Please try again.",
+      })
       setShowScanner(false)
       setScannerKey((prev) => prev + 1)
     }
@@ -246,6 +262,36 @@ export default function CheckInPage() {
     }
   }, [])
 
+  // Show toast notifications for success/error
+  React.useEffect(() => {
+    if (success) {
+      toast({
+        title: "Success!",
+        description: success,
+      })
+      // Also set local message for manual tab
+      if (activeTab === "manual") {
+        setMessage(success)
+        setMessageType("success")
+      }
+    }
+  }, [success, activeTab, toast])
+
+  React.useEffect(() => {
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error,
+      })
+      // Also set local message for manual tab
+      if (activeTab === "manual") {
+        setMessage(error)
+        setMessageType("error")
+      }
+    }
+  }, [error, activeTab, toast])
+
   // Auto-clear messages and show QR success
   React.useEffect(() => {
     if (success && activeTab === "qr") {
@@ -323,8 +369,10 @@ export default function CheckInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+    <>
+      <Toaster />
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl">
         <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} />
 
         {success && lastAction && (
@@ -428,5 +476,6 @@ export default function CheckInPage() {
         </div>
       </div>
     </div>
+    </>
   )
 }

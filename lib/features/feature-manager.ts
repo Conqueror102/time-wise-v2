@@ -140,7 +140,13 @@ export function canAddStaff(
     return true
   }
 
-  const maxStaff = PLAN_FEATURES[plan].maxStaff
+  // Handle undefined or invalid plan
+  if (!plan || !PLAN_FEATURES[plan]) {
+    console.warn(`Invalid plan type in canAddStaff: ${plan}, defaulting to starter`)
+    plan = "starter"
+  }
+
+  const maxStaff = PLAN_FEATURES[plan]?.maxStaff ?? 10
   
   // -1 means unlimited
   if (maxStaff === -1) {

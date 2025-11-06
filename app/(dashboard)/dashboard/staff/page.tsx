@@ -187,8 +187,9 @@ export default function StaffPage() {
     ? canAddStaff(organization.subscriptionTier as PlanType, staff.length, isDevelopment)
     : false
 
-  const maxStaff = organization
-    ? PLAN_FEATURES[organization.subscriptionTier as PlanType]?.maxStaff
+  const planType = (organization?.subscriptionTier as PlanType) || "starter"
+  const maxStaff = organization && PLAN_FEATURES[planType]
+    ? PLAN_FEATURES[planType].maxStaff
     : 10
 
   return (
