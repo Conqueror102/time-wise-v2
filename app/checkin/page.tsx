@@ -143,20 +143,33 @@ export default function CheckInPage() {
 
   const handleBiometricScan = async (scannedStaffId: string) => {
     setStaffId(scannedStaffId)
-    setActiveTab("manual")
+    
+    // Check attendance status first
     await checkAttendanceStatus(scannedStaffId)
-
-    // Scroll to manual tab after biometric scan
-    setTimeout(() => {
-      const manualTab = document.querySelector('[data-tab="manual"]')
-      if (manualTab) {
-        manualTab.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-          inline: "nearest"
+    
+    // Wait a bit for status to update
+    setTimeout(async () => {
+      // Automatically check in or out based on current status
+      if (attendanceStatus?.hasCheckedOut) {
+        // Already completed for today
+        toast({
+          title: "Already Completed",
+          description: "You have already checked in and out for today.",
         })
+      } else if (attendanceStatus?.hasCheckedIn) {
+        // Check out
+        await handleCheckInLogic(scannedStaffId, "check-out", capturePhotos, "fingerprint")
+      } else {
+        // Check in
+        await handleCheckInLogic(scannedStaffId, "check-in", capturePhotos, "fingerprint")
       }
-    }, 300)
+      
+      // Reset for next user
+      setTimeout(() => {
+        setStaffId("")
+        resetAttendanceStatus()
+      }, 3000)
+    }, 500)
   }
 
   const handleCloseScanner = async () => {

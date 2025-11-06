@@ -62,9 +62,9 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
           id: window.location.hostname,
         },
         user: {
-          id: new TextEncoder().encode(staffId || "user"),
-          name: staffId || "user",
-          displayName: staffId || "User",
+          id: new TextEncoder().encode("staff-member"),
+          name: staffId || "Staff Member",
+          displayName: staffId || "Staff Member",
         },
         pubKeyCredParams: [{ alg: -7, type: "public-key" }],
         authenticatorSelection: {

@@ -110,12 +110,11 @@ export async function POST(request: NextRequest) {
         const verification = await verifyAuthenticationResponse(verificationOpts)
         
         if (!verification.verified) {
-          console.error("Verification failed but continuing for debugging")
-          // Temporarily allow unverified for debugging
-          // return NextResponse.json(
-          //   { error: "Authentication verification failed" },
-          //   { status: 401 }
-          // )
+          console.error("Verification failed")
+          return NextResponse.json(
+            { error: "Authentication verification failed" },
+            { status: 401 }
+          )
         }
 
         // Update the counter to prevent replay attacks
@@ -126,12 +125,10 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error("WebAuthn verification error:", error)
         console.error("Error details:", JSON.stringify(error, null, 2))
-        // Temporarily allow for debugging - REMOVE IN PRODUCTION
-        console.log("Allowing authentication despite verification error for debugging")
-        // return NextResponse.json(
-        //   { error: "Authentication failed" },
-        //   { status: 401 }
-        // )
+        return NextResponse.json(
+          { error: "Authentication failed" },
+          { status: 401 }
+        )
       }
     }
 
