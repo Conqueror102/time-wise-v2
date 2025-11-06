@@ -13,7 +13,7 @@ import {
   Legend,
 } from "chart.js"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Users, TrendingUp, Clock } from "lucide-react"
+import { Users } from "lucide-react"
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
@@ -97,7 +97,7 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
           padding: 15,
           font: {
             size: 12,
-            weight: "500",
+            weight: "normal" as const,
           },
         },
       },

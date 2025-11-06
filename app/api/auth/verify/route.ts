@@ -5,6 +5,8 @@ import { ObjectId } from "mongodb"
 import { withErrorHandler } from "@/lib/middleware/error-handler"
 import { verifyToken } from "@/lib/auth"
 
+export const dynamic = 'force-dynamic'
+
 export const GET = withErrorHandler(async (request: NextRequest) => {
   try {
     // Get token from Authorization header
