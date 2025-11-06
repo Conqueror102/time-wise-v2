@@ -39,6 +39,13 @@ export default function SettingsPage() {
         const org = JSON.parse(orgData)
         console.log("Loaded organization data:", org)
         console.log("capturePhotos setting:", org.settings?.capturePhotos)
+        
+        // Ensure organization has a valid subscriptionTier
+        if (!org.subscriptionTier) {
+          console.warn("Organization missing subscriptionTier, defaulting to starter")
+          org.subscriptionTier = "starter"
+        }
+        
         setOrganization(org)
         
         // Ensure boolean conversion for capturePhotos

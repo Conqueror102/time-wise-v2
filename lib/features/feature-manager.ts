@@ -117,8 +117,14 @@ export function hasFeatureAccess(
     return true
   }
 
+  // Handle undefined or invalid plan
+  if (!plan || !PLAN_FEATURES[plan]) {
+    console.warn(`Invalid plan type: ${plan}, defaulting to starter`)
+    plan = "starter"
+  }
+
   const planFeatures = PLAN_FEATURES[plan]
-  return planFeatures[feature] as boolean
+  return planFeatures?.[feature] as boolean ?? false
 }
 
 /**

@@ -134,14 +134,20 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // Send OTP email (don't block registration if email fails)
-    sendOTPEmail({
+    // Send OTP email
+    console.log("Attempting to send OTP email to:", adminEmail)
+    const emailResult = await sendOTPEmail({
       to: adminEmail,
       otp: otpData.code,
       firstName,
-    }).catch((error) => {
-      console.error("Failed to send OTP email:", error)
     })
+
+    if (!emailResult.success) {
+      console.error("Failed to send OTP email:", emailResult.error)
+      // Log but don't block registration
+    } else {
+      console.log("OTP email sent successfully")
+    }
 
     // Return success (without sensitive data)
     const { password: _, ...userWithoutPassword } = { ...adminUser, _id: userResult.insertedId }
