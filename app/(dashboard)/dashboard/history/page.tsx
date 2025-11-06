@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { getImageSrc } from "@/lib/utils/image"
+import { getUTCDateString, subtractDaysUTC, getLocalTimeString, getLocalDateString } from "@/lib/utils/date"
 import { Calendar, Filter, Download, Search, FileText } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -37,8 +38,8 @@ export default function HistoryPage() {
   const [selectedStaff, setSelectedStaff] = useState<string>("all")
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
   const [filteredHistory, setFilteredHistory] = useState<AttendanceRecord[]>([])
-  const [startDate, setStartDate] = useState(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0])
+  const [startDate, setStartDate] = useState(getUTCDateString(subtractDaysUTC(new Date(), 7)))
+  const [endDate, setEndDate] = useState(getUTCDateString())
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(false)
@@ -159,18 +160,11 @@ export default function HistoryPage() {
   }
 
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    return getLocalTimeString(new Date(timestamp))
   }
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
+    const formatDate = (dateStr: string) => {
+    return getLocalDateString(new Date(dateStr))
   }
 
   return (

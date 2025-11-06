@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Check, Crown, Zap, Shield, Star, ArrowRight } from "lucide-react"
 import { SUBSCRIPTION_PLANS } from "@/lib/subscription-plans"
-import type { Organization } from "@/lib/models"
+import type { Organization } from "@/lib/types"
 
 interface SubscriptionGateProps {
   organization: Organization
@@ -70,7 +70,7 @@ export function SubscriptionGate({ organization, requiredTier, feature, onUpgrad
                 </div>
               </div>
               <div className="space-y-2">
-                {requiredPlan.features.slice(0, 3).map((feature, index) => (
+                {requiredPlan.features.slice(0, 3).map((feature: string, index: number) => (
                   <div key={index} className="flex items-center gap-2 text-sm">
                     <Check className="w-4 h-4 text-green-600" />
                     <span className="text-gray-700">{feature}</span>

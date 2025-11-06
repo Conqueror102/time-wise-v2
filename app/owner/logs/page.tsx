@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getUTCDateString } from "@/lib/utils/date"
 import { DataTable, Column } from "@/components/owner/shared/DataTable"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -86,7 +87,7 @@ export default function AuditLogsPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `audit-logs-${new Date().toISOString().split("T")[0]}.csv`
+        a.download = `audit-logs-${getUTCDateString()}.csv`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)

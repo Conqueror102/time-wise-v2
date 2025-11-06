@@ -1,6 +1,7 @@
 // Analytics Service - Handles dashboard statistics and system analytics
 
 import { getDatabase } from "@/lib/mongodb"
+import { getUTCDate, subtractDaysUTC } from "@/lib/utils/date"
 import {
   DashboardStats,
   RevenueData,
@@ -80,22 +81,32 @@ export class AnalyticsService {
       const webhooks = db.collection("paystack_webhooks")
 
       // Calculate date range based on period
-      const now = new Date()
-      let startDate = new Date()
+      const now = getUTCDate()
+      let startDate: Date
 
       switch (period) {
         case "day":
-          startDate.setDate(now.getDate() - 30) // Last 30 days
+          startDate = subtractDaysUTC(now, 30) // Last 30 days
           break
         case "week":
-          startDate.setDate(now.getDate() - 12 * 7) // Last 12 weeks
+          startDate = subtractDaysUTC(now, 12 * 7) // Last 12 weeks
           break
         case "month":
-          startDate.setMonth(now.getMonth() - 12) // Last 12 months
+          startDate = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth() - 12,
+            now.getUTCDate()
+          )) // Last 12 months
           break
         case "year":
-          startDate.setFullYear(now.getFullYear() - 5) // Last 5 years
+          startDate = new Date(Date.UTC(
+            now.getUTCFullYear() - 5,
+            now.getUTCMonth(),
+            now.getUTCDate()
+          )) // Last 5 years
           break
+        default:
+          startDate = subtractDaysUTC(now, 30) // Default to last 30 days
       }
 
       const revenueData = await webhooks

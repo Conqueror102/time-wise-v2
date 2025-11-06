@@ -57,12 +57,8 @@ export function QRScannerTab({
   if (showQRSuccess) {
     return (
       <div className="text-center py-8">
-        <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
-        <h3 className="text-lg font-semibold text-green-900 mb-2">
-          {lastAction?.type === "check-in" ? "Checked In Successfully!" : "Checked Out Successfully!"}
-        </h3>
         <p className="text-gray-600 mb-4">
-          {lastAction?.name} • {lastAction?.time}
+          Ready to scan another QR code
         </p>
         <Button
           onClick={onResetQRSuccess}

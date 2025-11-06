@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { getUTCDateString, subtractDaysUTC } from "@/lib/utils/date"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, AttendanceLog, TenantError } from "@/lib/types"
@@ -13,7 +14,6 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const range = searchParams.get("range") || "30d"
 
-    const now = new Date()
     const daysMap: Record<string, number> = {
       "7d": 7,
       "30d": 30,
@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
       "1y": 365,
     }
     const days = daysMap[range] || 30
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-    const startDateStr = startDate.toISOString().split("T")[0]
+    
+    const startDate = subtractDaysUTC(new Date(), days)
+    const startDateStr = getUTCDateString(startDate)
 
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
@@ -82,20 +83,27 @@ export async function GET(request: NextRequest) {
         : 100
 
       // Calculate trend by comparing with previous period
-      const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000)
-      const previousStartDateStr = previousStartDate.toISOString().split("T")[0]
-      const previousRecords = attendanceRecords.filter((r) => 
-        r.department === dept.name && 
-        r.date >= previousStartDateStr && 
-        r.date < startDateStr &&
-        r.checkInTime
-      )
-      const previousLateCount = previousRecords.filter((r) => r.isLate === true).length
-      const previousPunctuality = previousRecords.length > 0
-        ? ((previousRecords.length - previousLateCount) / previousRecords.length) * 100
-        : 100
+      const previousStartDate = subtractDaysUTC(startDate, days)
+      const previousStartDateStr = getUTCDateString(previousStartDate)
       
-      const trend = Math.round((punctualityScore - previousPunctuality) * 10) / 10
+      let calculatedTrend = 0
+      try {
+        const previousRecords = attendanceRecords.filter((r) => 
+          r.department === dept.name && 
+          r.date >= previousStartDateStr && 
+          r.date < startDateStr &&
+          r.checkInTime
+        )
+        
+        const previousLateCount = previousRecords.filter((r) => r.isLate === true).length
+        const previousPunctuality = previousRecords.length > 0
+          ? ((previousRecords.length - previousLateCount) / previousRecords.length) * 100
+          : punctualityScore // Use current score if no previous data
+        
+        calculatedTrend = Math.round((punctualityScore - previousPunctuality) * 10) / 10
+      } catch (e) {
+        console.error(`Error calculating trend for department ${dept.name}:`, e)
+      }
 
       return {
         name: dept.name,
@@ -103,7 +111,7 @@ export async function GET(request: NextRequest) {
         attendanceRate: Math.min(attendanceRate, 100),
         punctualityScore,
         lateCount,
-        trend,
+        trend: calculatedTrend,
       }
     })
 

@@ -3,6 +3,8 @@
  * Controls feature access based on subscription plan
  */
 
+import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
+
 export type PlanType = "free_trial" | "starter" | "professional" | "enterprise"
 
 export interface PlanFeatures {
@@ -146,23 +148,21 @@ export function canAddStaff(
  * Check if trial has expired
  */
 export function isTrialExpired(trialEndDate: Date): boolean {
-  return new Date() > trialEndDate
+  return getUTCDate() > trialEndDate
 }
 
 /**
  * Calculate trial end date (14 days from start)
  */
-export function calculateTrialEndDate(startDate: Date = new Date()): Date {
-  const endDate = new Date(startDate)
-  endDate.setDate(endDate.getDate() + 14)
-  return endDate
+export function calculateTrialEndDate(startDate: Date = getUTCDate()): Date {
+  return addDaysUTC(startDate, 14)
 }
 
 /**
  * Get days remaining in trial
  */
 export function getTrialDaysRemaining(trialEndDate: Date): number {
-  const now = new Date()
+  const now = getUTCDate()
   const diff = trialEndDate.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
   return Math.max(0, days)

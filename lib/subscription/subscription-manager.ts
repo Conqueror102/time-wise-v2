@@ -5,6 +5,7 @@
 
 import { getDatabase } from "@/lib/mongodb"
 import { ObjectId } from "mongodb"
+import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 
 export interface Subscription {
   _id?: ObjectId
@@ -207,14 +208,11 @@ export async function getSubscriptionStatus(organizationId: string): Promise<{
   let trialDaysRemaining: number | null = null
 
   if (subscription.plan === "free_trial" && subscription.trialEndDate) {
-    const diff = subscription.trialEndDate.getTime() - new Date().getTime()
+    const diff = subscription.trialEndDate.getTime() - getUTCDate().getTime()
     trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const needsUpgrade =
-    subscription.plan === "free_trial" &&
-    subscription.trialEndDate &&
-    new Date() > subscription.trialEndDate
+  const needsUpgrade = subscription.plan === "free_trial" && subscription.trialEndDate ? (new Date() > subscription.trialEndDate) : false
 
   return {
     plan: subscription.plan,

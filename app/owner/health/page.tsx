@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getUTCDate } from "@/lib/utils/date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,35 +39,35 @@ export default function HealthPage() {
           service: "MongoDB Database",
           status: "healthy",
           responseTime: 15,
-          lastChecked: new Date().toISOString(),
+          lastChecked: getUTCDate().toISOString(),
           message: "All connections active",
         },
         {
           service: "Paystack API",
           status: "healthy",
           responseTime: 234,
-          lastChecked: new Date().toISOString(),
+          lastChecked: getUTCDate().toISOString(),
           message: "Payment gateway operational",
         },
         {
           service: "Resend Email Service",
           status: "healthy",
           responseTime: 145,
-          lastChecked: new Date().toISOString(),
+          lastChecked: getUTCDate().toISOString(),
           message: "Email delivery normal",
         },
         {
           service: "AWS Rekognition",
           status: "healthy",
           responseTime: 567,
-          lastChecked: new Date().toISOString(),
+          lastChecked: getUTCDate().toISOString(),
           message: "Face verification available",
         },
         {
           service: "Paystack Webhooks",
           status: "healthy",
           responseTime: 0,
-          lastChecked: new Date().toISOString(),
+          lastChecked: getUTCDate().toISOString(),
           message: "Last webhook received 2m ago",
         },
       ])

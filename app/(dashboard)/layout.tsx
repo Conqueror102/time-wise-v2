@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { useAuthGuard } from "@/hooks/use-auth-guard"
 import Link from "next/link"
 import {
   Building2,
@@ -24,54 +25,21 @@ import {
   History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { AuthenticatingScreen } from "@/components/auth/authenticating-screen"
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<any>(null)
-  const [organization, setOrganization] = useState<any>(null)
+  const { isLoading, user, organization } = useAuthGuard()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [reportsOpen, setReportsOpen] = useState(true)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    // Prevent any rendering until we load fresh data
-    setIsLoading(true)
-    
-    // Small delay to ensure clean state
-    const timer = setTimeout(() => {
-      // Check authentication
-      const token = localStorage.getItem("accessToken")
-      const userData = localStorage.getItem("user")
-      const orgData = localStorage.getItem("organization")
-
-      if (!token || !userData || !orgData) {
-        router.push("/login")
-        return
-      }
-
-      try {
-        const parsedUser = JSON.parse(userData)
-        const parsedOrg = JSON.parse(orgData)
-
-        console.log("Dashboard loaded with user:", parsedUser)
-        console.log("Dashboard loaded with org:", parsedOrg)
-
-        setUser(parsedUser)
-        setOrganization(parsedOrg)
-      } catch (error) {
-        console.error("Error parsing user data:", error)
-        localStorage.clear()
-        router.push("/login")
-        return
-      }
-      
-      setIsLoading(false)
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [router])
+  // Authentication is now handled by useAuthGuard
 
   const handleLogout = () => {
     // Clear all localStorage data
@@ -110,16 +78,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard/settings", label: "Settings", icon: Settings },
   ]
 
-  // Show loading state until data is confirmed loaded
-  if (isLoading || !user || !organization) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    )
+  // Show loading state
+  if (isLoading) {
+    return <AuthenticatingScreen />
+  }
+
+  // If not loading but no user/org data, something went wrong
+  if (!user || !organization) {
+    router.push("/login")
+    return null
   }
 
   return (

@@ -7,6 +7,7 @@
 
 import { useState } from "react"
 import React from "react"
+import { getUTCDate } from "@/lib/utils/date"
 import { User, QrCode, Fingerprint, ScanFace } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -233,7 +234,7 @@ export default function CheckInPage() {
     const storedTimestamp = sessionStorage.getItem("settingsTimestamp")
 
     const isStale = storedTimestamp ?
-      (Date.now() - parseInt(storedTimestamp)) > (5 * 60 * 1000) : true
+      (getUTCDate().getTime() - parseInt(storedTimestamp)) > (5 * 60 * 1000) : true
 
     if (storedTenantId && storedOrgName && !isStale) {
       setTenantId(storedTenantId)

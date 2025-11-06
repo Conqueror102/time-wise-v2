@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { updateSubscriptionAfterPayment, cancelSubscription } from "@/lib/subscription/subscription-manager"
+import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 import { getDatabase } from "@/lib/mongodb"
 import type { PaystackWebhook } from "@/lib/types/super-admin"
 
@@ -84,9 +85,8 @@ async function handleChargeSuccess(data: any) {
       return
     }
 
-    // Calculate next payment date
-    const nextPaymentDate = new Date()
-    nextPaymentDate.setDate(nextPaymentDate.getDate() + 30)
+    // Calculate next payment date using UTC
+    const nextPaymentDate = addDaysUTC(getUTCDate(), 30)
 
     // Update subscription
     await updateSubscriptionAfterPayment(

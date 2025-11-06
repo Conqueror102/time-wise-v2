@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { getUTCDateString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -47,7 +48,7 @@ export default function ReportsPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `${reportType}-report-${new Date().toISOString().split("T")[0]}.csv`
+      a.download = `${reportType}-report-${getUTCDateString()}.csv`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)

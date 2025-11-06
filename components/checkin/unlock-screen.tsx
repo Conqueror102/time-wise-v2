@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { getUTCDate } from "@/lib/utils/date"
 import { Lock, Loader2, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,7 +48,7 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
       const capturePhotosValue = data.capturePhotos || false
 
       // Store in session storage (cleared when browser closes)
-      const timestamp = Date.now().toString()
+      const timestamp = getUTCDate().getTime().toString()
       sessionStorage.setItem("checkInTenantId", data.tenantId)
       sessionStorage.setItem("checkInOrgName", data.organizationName)
       sessionStorage.setItem("capturePhotos", capturePhotosValue ? "true" : "false")

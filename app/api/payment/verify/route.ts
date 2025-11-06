@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { withAuth } from "@/lib/auth"
+import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 import { verifyPayment } from "@/lib/services/paystack"
 import { updateSubscriptionAfterPayment } from "@/lib/subscription/subscription-manager"
 import { PLAN_PRICES } from "@/lib/features/feature-manager"
@@ -76,8 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate next payment date (30 days from now)
-    const nextPaymentDate = new Date()
-    nextPaymentDate.setDate(nextPaymentDate.getDate() + 30)
+    const nextPaymentDate = addDaysUTC(getUTCDate(), 30)
 
     // Update subscription
     await updateSubscriptionAfterPayment(context.tenantId, plan, {

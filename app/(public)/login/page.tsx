@@ -7,11 +7,14 @@
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Building2, Loader2 } from "lucide-react"
+import { Building2, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { LoginResponse, getAuthErrorMessage } from "@/lib/types/auth"
+import { ErrorCodes } from "@/lib/types/errors"
 
 function LoginForm() {
   const router = useRouter()
@@ -62,18 +65,29 @@ function LoginForm() {
         body: JSON.stringify(formData),
       })
 
-      const data = await response.json()
+      const data: LoginResponse = await response.json()
 
       if (!response.ok) {
-        // Check if email needs verification
-        if (data.code === "EMAIL_NOT_VERIFIED") {
+        // Special handling for email verification
+        if (data.code === ErrorCodes.EMAIL_NOT_VERIFIED && data.email) {
           router.push(`/verify-email?email=${encodeURIComponent(data.email)}`)
           return
         }
-        throw new Error(data.error || "Login failed")
+
+        // Handle subscription expiry
+        if (data.code === ErrorCodes.SUBSCRIPTION_EXPIRED) {
+          router.push("/payment?reason=subscription-expired")
+          return
+        }
+
+        throw new Error(getAuthErrorMessage(data.code, data.error || "Login failed"))
       }
 
-      // Store token
+      if (!data.accessToken || !data.user || !data.organization) {
+        throw new Error("Invalid server response")
+      }
+
+      // Store token and user data
       localStorage.setItem("accessToken", data.accessToken)
       localStorage.setItem("user", JSON.stringify(data.user))
       localStorage.setItem("organization", JSON.stringify(data.organization))
@@ -147,16 +161,17 @@ function LoginForm() {
 
               {/* Success Message */}
               {success && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-                  {success}
-                </div>
+                <Alert className="mt-4">
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
               )}
 
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                  {error}
-                </div>
+                <Alert variant="destructive" className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
 
               {/* Submit Button */}

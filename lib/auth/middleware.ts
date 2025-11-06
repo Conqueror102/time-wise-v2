@@ -6,43 +6,74 @@ import { NextRequest } from "next/server"
 import { verifyToken, extractTokenFromHeader } from "./jwt"
 import { TenantContext, TenantError, ErrorCodes, UserRole } from "@/lib/types"
 
+interface AuthOptions {
+  allowedRoles?: UserRole[]
+}
+
 /**
  * Extract and verify authentication from request
- * Returns tenant context or throws error
+ * Returns tenant context or throws TenantError
  */
 export async function authenticate(request: NextRequest): Promise<TenantContext> {
-  const authHeader = request.headers.get("Authorization")
+  const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
   const token = extractTokenFromHeader(authHeader)
 
   if (!token) {
     throw new TenantError(
-      "Authentication required. Please provide a valid token.",
+      "Authentication required. Please login to continue.",
       ErrorCodes.UNAUTHORIZED,
       401
     )
   }
 
-  const payload = verifyToken(token)
-
-  return {
-    userId: payload.userId,
-    tenantId: payload.tenantId,
-    role: payload.role,
-    email: payload.email,
+  let payload: any
+  try {
+    payload = verifyToken(token)
+  } catch (err: any) {
+    if (err?.name === "TokenExpiredError") {
+      throw new TenantError(
+        "Your session has expired. Please login again.",
+        ErrorCodes.TOKEN_EXPIRED,
+        401
+      )
+    }
+    throw new TenantError(
+      "Invalid authentication token. Please login again.",
+      ErrorCodes.TOKEN_INVALID,
+      401
+    )
   }
+
+  if (!payload?.userId || !payload?.tenantId) {
+    throw new TenantError(
+      "Invalid token format. Please login again.",
+      ErrorCodes.TOKEN_INVALID,
+      401
+    )
+  }
+
+  // Build TenantContext to return
+  const context: TenantContext = {
+    tenantId: payload.tenantId,
+    user: {
+      _id: payload.userId,
+      role: payload.role as UserRole,
+      email: payload.email,
+    },
+    organization: payload.organization ? { name: payload.organization.name, status: payload.organization.status } : undefined,
+  }
+
+  return context
 }
 
 /**
- * Require specific roles for access
+ * Require that the context user has one of the allowed roles
  */
-export function requireRole(
-  context: TenantContext,
-  allowedRoles: UserRole[]
-): void {
-  if (!allowedRoles.includes(context.role)) {
+export function requireRole(context: TenantContext, allowedRoles: UserRole[]) {
+  if (!context.user || !allowedRoles.includes(context.user.role)) {
     throw new TenantError(
       "Insufficient permissions to access this resource",
-      ErrorCodes.UNAUTHORIZED,
+      ErrorCodes.INSUFFICIENT_PERMISSIONS,
       403
     )
   }
@@ -51,14 +82,8 @@ export function requireRole(
 /**
  * Verify tenant context matches the requested tenant
  */
-export function verifyTenantAccess(
-  context: TenantContext,
-  requestedTenantId: string
-): void {
-  if (context.role === "super_admin") {
-    // Super admin can access any tenant
-    return
-  }
+export function verifyTenantAccess(context: TenantContext, requestedTenantId: string) {
+  if (context.user && context.user.role === "super_admin") return
 
   if (context.tenantId !== requestedTenantId) {
     throw new TenantError(
@@ -70,23 +95,12 @@ export function verifyTenantAccess(
 }
 
 /**
- * Authentication helper for API routes
- * Usage in API route:
- * 
- * export async function GET(request: NextRequest) {
- *   const context = await withAuth(request)
- *   // ... use context.tenantId, context.userId, etc.
- * }
+ * Helper wrapper to use in API routes
  */
-export async function withAuth(
-  request: NextRequest,
-  options?: {
-    allowedRoles?: UserRole[]
-  }
-): Promise<TenantContext> {
+export async function withAuth(request: NextRequest, options: AuthOptions = {}): Promise<TenantContext> {
   const context = await authenticate(request)
 
-  if (options?.allowedRoles) {
+  if (options.allowedRoles && options.allowedRoles.length > 0) {
     requireRole(context, options.allowedRoles)
   }
 

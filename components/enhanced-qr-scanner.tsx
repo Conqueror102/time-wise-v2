@@ -22,6 +22,48 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
   const cleanupInProgressRef = useRef(false)
   const lastScanRef = useRef("")
   const lastScanTimeRef = useRef(0)
+  const audioContextRef = useRef<AudioContext | null>(null)
+
+  // Initialize audio context for beep sound
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'AudioContext' in window) {
+      audioContextRef.current = new AudioContext()
+    }
+    return () => {
+      audioContextRef.current?.close()
+    }
+  }, [])
+
+  // Play success beep
+  const playSuccessBeep = () => {
+    if (!audioContextRef.current) return
+    
+    try {
+      const oscillator = audioContextRef.current.createOscillator()
+      const gainNode = audioContextRef.current.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContextRef.current.destination)
+      
+      oscillator.frequency.value = 800 // Hz
+      oscillator.type = 'sine'
+      
+      gainNode.gain.setValueAtTime(0.3, audioContextRef.current.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.2)
+      
+      oscillator.start(audioContextRef.current.currentTime)
+      oscillator.stop(audioContextRef.current.currentTime + 0.2)
+    } catch (err) {
+      console.warn('Could not play beep:', err)
+    }
+  }
+
+  // Trigger haptic feedback
+  const triggerHaptic = () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(200) // 200ms vibration
+    }
+  }
 
   useEffect(() => {
     mountedRef.current = true
@@ -86,14 +128,16 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         scannerRef.current = null
       }
       
-      // Aggressively stop all video streams
+      // Aggressively stop all video streams within our scanner container
       console.log("Stopping all video streams...")
-      const videoElements = document.querySelectorAll('video')
+      const container = document.getElementById(elementId)
+      const videoElements = container ? container.querySelectorAll('video') : []
+      
       videoElements.forEach((video, index) => {
         console.log(`Processing video element ${index}:`, video)
         try {
-          // Pause the video
-          video.pause()
+          // Pause the video (suppress AbortError)
+          video.pause().catch(() => {})
           
           // Stop all tracks from srcObject
           if (video.srcObject) {
@@ -120,19 +164,17 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
             video.removeAttribute('src')
             video.load() // Reset the video element
           }
+          
+          // Remove the video element from DOM
+          video.remove()
         } catch (e) {
           console.warn(`Error cleaning up video element ${index}:`, e)
         }
       })
       
-      // Also try to get and stop all media streams directly
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // This is a bit of a hack, but we'll try to enumerate and stop any active streams
-          console.log("Attempting to stop any remaining media streams...")
-        }
-      } catch (e) {
-        console.warn("Error accessing media devices:", e)
+      // Clear the container completely
+      if (container) {
+        container.innerHTML = ''
       }
       
       setIsScanning(false)
@@ -157,17 +199,23 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         return
       }
 
-      // Clear any existing scanner
+      // Clear any existing scanner first
       await cleanup()
 
+      // Ensure the container is empty before creating new scanner
+      const container = document.getElementById(elementId)
+      if (container) {
+        container.innerHTML = ''
+      }
+
       // Small delay to ensure cleanup is complete
-      setTimeout(() => {
-        if (mountedRef.current) {
-          scannerRef.current = new Html5Qrcode(elementId)
-          setScannerReady(true)
-          startScanning(devices)
-        }
-      }, 100)
+      await new Promise(resolve => setTimeout(resolve, 200))
+
+      if (mountedRef.current) {
+        scannerRef.current = new Html5Qrcode(elementId)
+        setScannerReady(true)
+        startScanning(devices)
+      }
     } catch (err) {
       console.error("Error initializing scanner:", err)
       setError("Failed to access camera. Please check permissions.")
@@ -187,9 +235,21 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         )?.id || devices[0].id
 
       const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
+        fps: 30, // Increased from 10 to 30 for faster scanning
+        qrbox: { width: 350, height: 350 },
+        aspectRatio: 1.0, // Square aspect ratio to fill container properly
+        disableFlip: false,
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1280 }, // Reduced for better compatibility
+          height: { ideal: 720 },
+          focusMode: "continuous", // Continuous autofocus
+        },
+        // Advanced settings for better performance
+        formatsToSupport: [0], // Only QR codes (0 = QR_CODE)
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true // Use native browser API if available
+        }
       }
 
       await scannerRef.current.start(
@@ -211,6 +271,10 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
           lastScanRef.current = decodedText
           lastScanTimeRef.current = now
           
+          // Provide feedback
+          playSuccessBeep()
+          triggerHaptic()
+          
           // Stop scanning immediately after successful scan
           await cleanup()
           
@@ -223,6 +287,26 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
           }
         },
       )
+
+      // After starting, check for duplicate video elements and remove them
+      setTimeout(() => {
+        const container = document.getElementById(elementId)
+        if (container) {
+          const videos = container.querySelectorAll('video')
+          console.log(`Found ${videos.length} video elements`)
+          
+          // If there are multiple videos, keep only the first one
+          if (videos.length > 1) {
+            console.log("Removing duplicate video elements...")
+            videos.forEach((video, index) => {
+              if (index > 0) {
+                video.remove()
+                console.log(`Removed video element ${index}`)
+              }
+            })
+          }
+        }
+      }, 500)
     } catch (err) {
       console.error("Error starting scanner:", err)
       setError("Failed to start camera. Please ensure camera permissions are granted.")
@@ -280,8 +364,8 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         <div className="relative">
           <div
             id={elementId}
-            className="w-full rounded-lg overflow-hidden bg-gray-100"
-            style={{ minHeight: "300px" }}
+            className="w-full rounded-lg overflow-hidden bg-gray-900 [&_video]:w-full [&_video]:h-auto [&_video]:object-cover [&_video]:grayscale [&_video]:contrast-125"
+            style={{ minHeight: "350px" }}
           />
 
           {!isScanning && !error && !scannerReady && (
@@ -291,6 +375,15 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
                   <Zap className="w-6 h-6 text-accent-teal animate-pulse" />
                 </div>
                 <p className="text-gray-600">Initializing camera...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Scanning tips overlay */}
+          {isScanning && (
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+              <div className="bg-black/70 text-white px-4 py-2 rounded-full text-sm backdrop-blur-sm animate-pulse">
+                Hold QR code steady within the frame
               </div>
             </div>
           )}
@@ -311,8 +404,7 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
           </div>
         )}
 
-        <div className="mt-4 text-center space-y-3">
-          <p className="text-gray-600 text-sm">Position the QR code within the scanning area</p>
+        <div className="mt-4 space-y-3">
           <div className="flex gap-2">
             <Button
               variant="outline"

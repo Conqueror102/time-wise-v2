@@ -9,6 +9,29 @@ import { ObjectId } from "mongodb"
 export type UserRole = "super_admin" | "org_admin" | "manager" | "staff"
 export type OrganizationStatus = "active" | "suspended" | "trial" | "cancelled"
 
+// Authentication methods used across the app
+export type AuthMethod = "manual" | "qr" | "face" | "fingerprint"
+
+export interface TenantContext {
+  tenantId: string
+  // Backwards-compatible top-level fields
+  userId?: string
+  role?: UserRole
+  email?: string
+
+  // Nested user object (preferred)
+  user?: {
+    _id: string
+    role: UserRole
+    email: string
+  }
+
+  organization?: {
+    name: string
+    status: OrganizationStatus
+  }
+}
+
 export interface Organization {
   _id?: ObjectId
   name: string
@@ -21,6 +44,7 @@ export interface Organization {
   updatedAt?: Date
   trialEndsAt?: Date
   settings?: OrganizationSettings
+  allowedMethods: AuthMethod[]
 }
 
 export interface User {
@@ -32,6 +56,7 @@ export interface User {
   firstName: string
   lastName: string
   isActive: boolean
+  emailVerified: boolean
   createdAt: Date
   updatedAt?: Date
   lastLogin?: Date
@@ -43,7 +68,7 @@ export interface OrganizationSettings {
   workEndTime: string // Format: "HH:MM"
   earlyDepartureTime?: string // Format: "HH:MM"
   maxStaff: number
-  allowedMethods: ("qr" | "manual" | "face" | "fingerprint")[]
+  allowedMethods: AuthMethod[]
   timezone: string
   checkInPasscode?: string
   capturePhotos?: boolean // Toggle for automatic photo capture
@@ -126,12 +151,7 @@ export interface JWTPayload {
   exp?: number
 }
 
-export interface TenantContext {
-  tenantId: string
-  userId: string
-  role: UserRole
-  email: string
-}
+// TenantContext is declared earlier (uses nested `user` and backward-compatible top-level fields)
 
 export interface AuthTokens {
   accessToken: string
@@ -223,27 +243,5 @@ export interface PaginatedResponse<T> {
 // ============================================
 // Error Types
 // ============================================
-
-export class TenantError extends Error {
-  code: string
-  statusCode: number
-
-  constructor(message: string, code: string, statusCode: number = 400) {
-    super(message)
-    this.code = code
-    this.name = "TenantError"
-    this.code = code
-    this.statusCode = statusCode
-  }
-}
-
-export const ErrorCodes = {
-  TENANT_NOT_FOUND: "TENANT_NOT_FOUND",
-  TENANT_SUSPENDED: "TENANT_SUSPENDED",
-  CROSS_TENANT_ACCESS: "CROSS_TENANT_ACCESS",
-  INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
-  UNAUTHORIZED: "UNAUTHORIZED",
-  VALIDATION_ERROR: "VALIDATION_ERROR",
-  DUPLICATE_ENTRY: "DUPLICATE_ENTRY",
-  NOT_FOUND: "NOT_FOUND",
-} as const
+// Re-export canonical error types from dedicated module
+export * from "./errors"

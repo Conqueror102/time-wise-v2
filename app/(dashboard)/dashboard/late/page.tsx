@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Clock, CheckCircle } from "lucide-react"
+import { getLocalTimeString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface StaffPresent {
@@ -42,10 +43,7 @@ export default function LatePage() {
   }
 
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    return getLocalTimeString(new Date(timestamp))
   }
 
   if (loading) {

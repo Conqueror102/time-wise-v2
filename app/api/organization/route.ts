@@ -1,5 +1,6 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 import { ObjectId } from "mongodb"
 
 export async function GET(request: NextRequest) {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
         maxStaff: 10,
       },
       createdAt: new Date(),
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
+      trialEndsAt: addDaysUTC(getUTCDate(), 14), // 14 days trial
     }
 
     const result = await db.collection("organizations").insertOne(newOrganization)

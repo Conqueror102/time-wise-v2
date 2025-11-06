@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { getLocalTimeString, getUTCDate } from "@/lib/utils/date"
 
 interface AttendanceStatus {
   hasCheckedIn: boolean
@@ -73,12 +74,13 @@ export function useCheckin(tenantId: string) {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: "user",
-          // Request better lighting conditions
-          advanced: [
-            { exposureMode: "continuous" },
-            { whiteBalanceMode: "continuous" },
-            { focusMode: "continuous" }
-          ]
+            // Request better lighting conditions (cast to any to support non-standard constraints)
+            // Some browsers expose advanced camera constraints not present in TypeScript DOM types
+            advanced: [
+              { exposureMode: "continuous" },
+              { whiteBalanceMode: "continuous" },
+              { focusMode: "continuous" }
+            ] as any
         }
       }).then((mediaStream) => {
         stream = mediaStream
@@ -206,7 +208,7 @@ export function useCheckin(tenantId: string) {
       setLastAction({
         name: staffName,
         type,
-        time: new Date().toLocaleTimeString(),
+        time: getLocalTimeString(new Date()),
         isLate: data.isLate,
         isEarly: data.isEarly,
       })
@@ -218,14 +220,14 @@ export function useCheckin(tenantId: string) {
         setAttendanceStatus({
           hasCheckedIn: true,
           hasCheckedOut: false,
-          checkInTime: new Date().toISOString(),
+          checkInTime: getUTCDate().toISOString(),
           isLate: data.isLate,
         })
       } else {
         setAttendanceStatus(prev => prev ? {
           ...prev,
           hasCheckedOut: true,
-          checkOutTime: new Date().toISOString(),
+          checkOutTime: getUTCDate().toISOString(),
           isEarly: data.isEarly,
         } : null)
       }

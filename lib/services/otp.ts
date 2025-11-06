@@ -4,6 +4,7 @@
  */
 
 import crypto from "crypto"
+import { getUTCDate } from "@/lib/utils/date"
 
 export interface OTPData {
   code: string
@@ -126,7 +127,7 @@ export function checkRateLimit(
 ): { allowed: boolean; error?: string } {
   // Filter requests within the time window
   const recentRequests = lastRequests.filter(
-    (requestTime) => now.getTime() - requestTime.getTime() < RATE_LIMIT_WINDOW_MS
+    (requestTime) => getUTCDate().getTime() - requestTime.getTime() < RATE_LIMIT_WINDOW_MS
   )
 
   if (recentRequests.length >= MAX_REQUESTS_PER_WINDOW) {

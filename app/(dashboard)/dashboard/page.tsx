@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Users, UserCheck, UserX, Clock, Calendar, TrendingUp } from "lucide-react"
+import { getLocalTimeString, getLocalDateString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 
@@ -56,10 +57,7 @@ export default function DashboardPage() {
   }
 
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    return getLocalTimeString(new Date(timestamp))
   }
 
   if (loading) {
@@ -85,21 +83,13 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-1">
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {getLocalDateString(new Date())}
           </p>
         </div>
         <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg">
           <Calendar className="w-5 h-5 text-blue-600" />
           <span className="text-sm font-medium text-blue-600">
-            {new Date().toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {getLocalTimeString(new Date())}
           </span>
         </div>
       </div>
