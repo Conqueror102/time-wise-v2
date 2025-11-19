@@ -135,7 +135,9 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
         challenge,
         timeout: 60000,
         userVerification: "required",
+        rpId: window.location.hostname,
       },
+      mediation: "conditional",
     })) as PublicKeyCredential
 
     if (assertion) {
