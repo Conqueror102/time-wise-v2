@@ -89,7 +89,7 @@ export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTren
       {
         label: "Check-ins",
         data: data?.checkIns || [],
-        borderColor: "#2563eb",
+        borderColor: "#2563eb", // Blue
         backgroundColor: "rgba(37, 99, 235, 0.1)",
         fill: true,
         tension: 0.4,
@@ -97,8 +97,8 @@ export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTren
       {
         label: "Check-outs",
         data: data?.checkOuts || [],
-        borderColor: "#1e40af",
-        backgroundColor: "rgba(30, 64, 175, 0.1)",
+        borderColor: "#8b5cf6", // Purple
+        backgroundColor: "rgba(139, 92, 246, 0.1)",
         fill: true,
         tension: 0.4,
       },

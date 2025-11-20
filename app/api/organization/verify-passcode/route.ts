@@ -110,11 +110,36 @@ export async function POST(request: NextRequest) {
     })
     console.log("=== END DEBUG ===")
 
+    // Check if organization is in trial period
+    const isInTrial = organization.status === "trial" && 
+                      organization.trialEndsAt && 
+                      new Date(organization.trialEndsAt) > new Date()
+
+    // Check if on paid plan (professional or enterprise)
+    const isPaidPlan = organization.subscriptionTier === "professional" || 
+                       organization.subscriptionTier === "enterprise"
+
+    // Fingerprint enabled if: explicitly set in settings, OR on paid plan, OR in trial
+    const fingerprintEnabled = organization.settings?.fingerprintEnabled === true || 
+                                isPaidPlan || 
+                                isInTrial
+
+    // Get enabled check-in methods
+    const enabledCheckInMethods = organization.settings?.enabledCheckInMethods || {
+      qrCode: true,
+      manualEntry: true,
+      faceRecognition: false,
+    }
+
     return NextResponse.json({
       success: true,
       tenantId: organization._id.toString(),
       organizationName: organization.name,
-      capturePhotos: capturePhotos,
+      capturePhotos: capturePhotos || isInTrial, // Enable photo verification during trial
+      fingerprintEnabled: fingerprintEnabled, // Enabled by default on paid plans and trial
+      isInTrial,
+      subscriptionTier: organization.subscriptionTier,
+      enabledCheckInMethods,
     })
   } catch (error) {
     console.error("Verify passcode error:", error)

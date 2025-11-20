@@ -6,9 +6,10 @@ import { Clock, Building2, Camera } from "lucide-react"
 interface CheckinHeaderProps {
   organizationName: string
   capturePhotos: boolean
+  isInTrial?: boolean
 }
 
-export function CheckinHeader({ organizationName, capturePhotos }: CheckinHeaderProps) {
+export function CheckinHeader({ organizationName, capturePhotos, isInTrial }: CheckinHeaderProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
@@ -31,6 +32,11 @@ export function CheckinHeader({ organizationName, capturePhotos }: CheckinHeader
           <div className="flex items-center justify-center gap-2 text-gray-600 mb-2">
             <Building2 className="w-5 h-5" />
             <span className="text-lg font-medium">{organizationName}</span>
+            {isInTrial && (
+              <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                14-Day Trial
+              </span>
+            )}
           </div>
           <p className="text-gray-600">Choose your preferred check-in method below</p>
         </div>

@@ -8,12 +8,12 @@
 import { useState } from "react"
 import React from "react"
 import { getUTCDate } from "@/lib/utils/date"
-import { User, QrCode, Fingerprint, ScanFace } from "lucide-react"
+import { User, QrCode, ScanFace, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FingerprintScanner } from "@/components/fingerprint-scanner"
 import { FaceRecognition } from "@/components/face-recognition"
 import { UnlockScreen } from "@/components/checkin/unlock-screen"
+import { FingerprintVerificationModal } from "@/components/checkin/fingerprint-verification-modal"
 import { CheckinHeader } from "@/components/checkin/checkin-header"
 import { SuccessMessage } from "@/components/checkin/success-message"
 import { ManualEntryTab } from "@/components/checkin/manual-entry-tab"
@@ -32,10 +32,19 @@ export default function CheckInPage() {
   const [tenantId, setTenantId] = useState("")
   const [organizationName, setOrganizationName] = useState("")
   const [capturePhotos, setCapturePhotos] = useState(false)
+  const [fingerprintEnabled, setFingerprintEnabled] = useState(false)
+  const [isInTrial, setIsInTrial] = useState(false)
   const [showQRSuccess, setShowQRSuccess] = useState(false)
   const [scannerClosing, setScannerClosing] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
+  const [showFingerprintModal, setShowFingerprintModal] = useState(false)
+  const [pendingCheckInType, setPendingCheckInType] = useState<"check-in" | "check-out" | null>(null)
+  const [enabledCheckInMethods, setEnabledCheckInMethods] = useState({
+    qrCode: true,
+    manualEntry: true,
+    faceRecognition: false,
+  })
 
   // Toast notifications
   const { toast } = useToast()
@@ -55,10 +64,28 @@ export default function CheckInPage() {
   } = useCheckin(tenantId)
 
   // Simplified handlers
-  const handleUnlock = (data: { tenantId: string; organizationName: string; capturePhotos: boolean }) => {
+  const handleUnlock = (data: { 
+    tenantId: string; 
+    organizationName: string; 
+    capturePhotos: boolean; 
+    fingerprintEnabled?: boolean; 
+    isInTrial?: boolean;
+    enabledCheckInMethods?: {
+      qrCode: boolean;
+      manualEntry: boolean;
+      faceRecognition: boolean;
+    }
+  }) => {
     setTenantId(data.tenantId)
     setOrganizationName(data.organizationName)
     setCapturePhotos(data.capturePhotos)
+    setFingerprintEnabled(data.fingerprintEnabled || false)
+    setIsInTrial(data.isInTrial || false)
+    setEnabledCheckInMethods(data.enabledCheckInMethods || {
+      qrCode: true,
+      manualEntry: true,
+      faceRecognition: false,
+    })
     setIsUnlocked(true)
   }
 
@@ -206,12 +233,96 @@ export default function CheckInPage() {
     console.log("QR scanner closed successfully")
   }
 
+  // Check if fingerprint verification is required
+  const requiresFingerprintVerification = async (staffIdToCheck: string): Promise<{ hasFingerprint: boolean; error?: string }> => {
+    try {
+      const response = await fetch("/api/biometric/fingerprint/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: staffIdToCheck, tenantId }),
+      })
+      
+      if (response.ok) {
+        const { credentials, hasFingerprint } = await response.json()
+        return { hasFingerprint: hasFingerprint || (credentials && credentials.length > 0) }
+      }
+      
+      // If 404 or other error, assume no fingerprint
+      return { hasFingerprint: false }
+    } catch (error) {
+      console.error("Error checking fingerprint:", error)
+      return { hasFingerprint: false }
+    }
+  }
+
   // Simple handlers
-  const handleCheckIn = (type: "check-in" | "check-out") => {
+  const handleCheckIn = async (type: "check-in" | "check-out") => {
+    console.log("=== CHECK-IN DEBUG ===")
+    console.log("fingerprintEnabled:", fingerprintEnabled)
+    
+    // Only require fingerprint if explicitly enabled in settings
+    if (fingerprintEnabled) {
+      console.log("Fingerprint verification is enabled - checking registration...")
+      const { hasFingerprint } = await requiresFingerprintVerification(staffId)
+      console.log("Staff has fingerprint registered:", hasFingerprint)
+      
+      if (hasFingerprint) {
+        // Staff has fingerprint registered - show verification modal
+        console.log("Showing fingerprint modal")
+        setPendingCheckInType(type)
+        setShowFingerprintModal(true)
+        return
+      } else {
+        // Staff has NO fingerprint registered - block them
+        console.log("Blocking - no fingerprint registered")
+        toast({
+          variant: "destructive",
+          title: "Fingerprint Not Registered",
+          description: "Fingerprint verification is required. Please contact your administrator to register your fingerprint on this device.",
+        })
+        return
+      }
+    }
+    
+    // Fingerprint not required - proceed normally
+    console.log("Proceeding with check-in (no fingerprint required)")
     handleCheckInLogic(staffId, type, capturePhotos, activeTab)
   }
 
+  const handleFingerprintSuccess = () => {
+    if (pendingCheckInType) {
+      handleCheckInLogic(staffId, pendingCheckInType, capturePhotos, activeTab)
+      setPendingCheckInType(null)
+    }
+  }
+
   const handleTabChange = async (value: string) => {
+    // Check if the method is disabled
+    if (value === "qr" && !enabledCheckInMethods.qrCode) {
+      toast({
+        variant: "destructive",
+        title: "Method Disabled",
+        description: "QR Code check-in has been disabled by your administrator.",
+      })
+      return
+    }
+    if (value === "manual" && !enabledCheckInMethods.manualEntry) {
+      toast({
+        variant: "destructive",
+        title: "Method Disabled",
+        description: "Manual Entry check-in has been disabled by your administrator.",
+      })
+      return
+    }
+    if (value === "face" && !enabledCheckInMethods.faceRecognition) {
+      toast({
+        variant: "destructive",
+        title: "Method Disabled",
+        description: "Face Recognition check-in has been disabled by your administrator.",
+      })
+      return
+    }
+
     if (activeTab === "qr" && value !== "qr") {
       console.log("Leaving QR tab, cleaning up...")
       setScannerClosing(true)
@@ -260,6 +371,9 @@ export default function CheckInPage() {
     const storedTenantId = sessionStorage.getItem("checkInTenantId")
     const storedOrgName = sessionStorage.getItem("checkInOrgName")
     const storedCapturePhotos = sessionStorage.getItem("capturePhotos")
+    const storedFingerprintEnabled = sessionStorage.getItem("fingerprintEnabled")
+    const storedIsInTrial = sessionStorage.getItem("isInTrial")
+    const storedEnabledMethods = sessionStorage.getItem("enabledCheckInMethods")
     const storedTimestamp = sessionStorage.getItem("settingsTimestamp")
 
     const isStale = storedTimestamp ?
@@ -269,6 +383,22 @@ export default function CheckInPage() {
       setTenantId(storedTenantId)
       setOrganizationName(storedOrgName)
       setCapturePhotos(storedCapturePhotos === "true")
+      setFingerprintEnabled(storedFingerprintEnabled === "true")
+      setIsInTrial(storedIsInTrial === "true")
+      if (storedEnabledMethods) {
+        try {
+          const methods = JSON.parse(storedEnabledMethods)
+          setEnabledCheckInMethods(methods)
+          // Set default active tab to first enabled method
+          if (!methods.manualEntry && methods.qrCode) {
+            setActiveTab("qr")
+          } else if (!methods.manualEntry && !methods.qrCode && methods.faceRecognition) {
+            setActiveTab("face")
+          }
+        } catch (e) {
+          console.error("Failed to parse enabled methods:", e)
+        }
+      }
       setIsUnlocked(true)
     } else if (isStale) {
       sessionStorage.clear()
@@ -384,9 +514,16 @@ export default function CheckInPage() {
   return (
     <>
       <Toaster />
+      <FingerprintVerificationModal
+        open={showFingerprintModal}
+        onClose={() => setShowFingerprintModal(false)}
+        staffId={staffId}
+        tenantId={tenantId}
+        onSuccess={handleFingerprintSuccess}
+      />
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
-        <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} />
+        <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} isInTrial={isInTrial} />
 
         {success && lastAction && (
           <SuccessMessage lastAction={lastAction} />
@@ -399,23 +536,85 @@ export default function CheckInPage() {
           </CardHeader>
           <CardContent className="min-h-[400px] p-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-gray-100 p-1 h-auto">
-                <TabsTrigger value="manual" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3">
-                  <User className="w-5 h-5 mr-2" />
-                  <span className="hidden sm:inline">Manual</span>
-                </TabsTrigger>
-                <TabsTrigger value="qr" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3">
-                  <QrCode className="w-5 h-5 mr-2" />
-                  <span className="hidden sm:inline">QR Code</span>
-                </TabsTrigger>
-                <TabsTrigger value="fingerprint" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3">
-                  <Fingerprint className="w-5 h-5 mr-2" />
-                  <span className="hidden sm:inline">Fingerprint</span>
-                </TabsTrigger>
-                <TabsTrigger value="face" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3">
-                  <ScanFace className="w-5 h-5 mr-2" />
-                  <span className="hidden sm:inline">Face</span>
-                </TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 h-auto">
+                <div 
+                  className="relative"
+                  onClick={() => {
+                    if (!enabledCheckInMethods.manualEntry) {
+                      toast({
+                        variant: "destructive",
+                        title: "Method Disabled",
+                        description: "Manual Entry has been disabled by your administrator.",
+                      })
+                    }
+                  }}
+                >
+                  <TabsTrigger 
+                    value="manual" 
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
+                    disabled={!enabledCheckInMethods.manualEntry}
+                  >
+                    <User className="w-5 h-5 mr-2" />
+                    <span className="hidden sm:inline">Manual</span>
+                  </TabsTrigger>
+                  {!enabledCheckInMethods.manualEntry && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <Lock className="w-5 h-5 text-red-500" />
+                    </div>
+                  )}
+                </div>
+                <div 
+                  className="relative"
+                  onClick={() => {
+                    if (!enabledCheckInMethods.qrCode) {
+                      toast({
+                        variant: "destructive",
+                        title: "Method Disabled",
+                        description: "QR Code has been disabled by your administrator.",
+                      })
+                    }
+                  }}
+                >
+                  <TabsTrigger 
+                    value="qr" 
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
+                    disabled={!enabledCheckInMethods.qrCode}
+                  >
+                    <QrCode className="w-5 h-5 mr-2" />
+                    <span className="hidden sm:inline">QR Code</span>
+                  </TabsTrigger>
+                  {!enabledCheckInMethods.qrCode && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <Lock className="w-5 h-5 text-red-500" />
+                    </div>
+                  )}
+                </div>
+                <div 
+                  className="relative"
+                  onClick={() => {
+                    if (!enabledCheckInMethods.faceRecognition) {
+                      toast({
+                        variant: "destructive",
+                        title: "Method Disabled",
+                        description: "Face Recognition has been disabled by your administrator.",
+                      })
+                    }
+                  }}
+                >
+                  <TabsTrigger 
+                    value="face" 
+                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
+                    disabled={!enabledCheckInMethods.faceRecognition}
+                  >
+                    <ScanFace className="w-5 h-5 mr-2" />
+                    <span className="hidden sm:inline">Face</span>
+                  </TabsTrigger>
+                  {!enabledCheckInMethods.faceRecognition && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <Lock className="w-5 h-5 text-red-500" />
+                    </div>
+                  )}
+                </div>
               </TabsList>
 
               <TabsContent value="manual" className="space-y-4" data-tab="manual">
@@ -436,12 +635,6 @@ export default function CheckInPage() {
                     setMessageType("")
                   }}
                 />
-              </TabsContent>
-
-              <TabsContent value="fingerprint" className="space-y-4">
-                {activeTab === "fingerprint" && (
-                  <FingerprintScanner mode="authenticate" onScan={handleBiometricScan} />
-                )}
               </TabsContent>
 
               <TabsContent value="face" className="space-y-4">
@@ -475,16 +668,10 @@ export default function CheckInPage() {
 
         <div className="mt-6 text-center text-sm text-gray-500 space-y-2">
           <p>
-            Want to use fingerprint or face recognition?{" "}
-            <a href="/register-biometric" className="text-blue-600 hover:underline font-medium">
-              Register your biometrics
-            </a>
-          </p>
-          <p>
-            Don't have your Staff ID?{" "}
-            <a href="/dashboard/staff" className="text-blue-600 hover:underline">
+            Don't have your Staff ID or QR code?{" "}
+            <span className="text-gray-700 font-medium">
               Contact your administrator
-            </a>
+            </span>
           </p>
         </div>
       </div>

@@ -30,6 +30,12 @@ export default function SettingsPage() {
     checkInPasscode: "",
     capturePhotos: false,
     photoRetentionDays: 7,
+    fingerprintEnabled: false,
+    enabledCheckInMethods: {
+      qrCode: true,
+      manualEntry: true,
+      faceRecognition: false,
+    },
   })
 
   useEffect(() => {
@@ -48,8 +54,9 @@ export default function SettingsPage() {
         
         setOrganization(org)
         
-        // Ensure boolean conversion for capturePhotos
+        // Ensure boolean conversion for capturePhotos and fingerprintEnabled
         const capturePhotos = org.settings?.capturePhotos === true || org.settings?.capturePhotos === "true"
+        const fingerprintEnabled = org.settings?.fingerprintEnabled === true || org.settings?.fingerprintEnabled === "true"
         
         setSettings({
           workStartTime: org.settings?.workStartTime || "09:00",
@@ -60,6 +67,12 @@ export default function SettingsPage() {
           checkInPasscode: org.settings?.checkInPasscode || "",
           capturePhotos: capturePhotos,
           photoRetentionDays: org.settings?.photoRetentionDays || 7,
+          fingerprintEnabled: fingerprintEnabled,
+          enabledCheckInMethods: org.settings?.enabledCheckInMethods || {
+            qrCode: true,
+            manualEntry: true,
+            faceRecognition: false,
+          },
         })
       } catch (err) {
         console.error("Error parsing organization data:", err)
@@ -134,6 +147,12 @@ export default function SettingsPage() {
         checkInPasscode: data.organization.settings?.checkInPasscode || "",
         capturePhotos: data.organization.settings?.capturePhotos === true,
         photoRetentionDays: data.organization.settings?.photoRetentionDays || 7,
+        fingerprintEnabled: data.organization.settings?.fingerprintEnabled === true,
+        enabledCheckInMethods: data.organization.settings?.enabledCheckInMethods || {
+          qrCode: true,
+          manualEntry: true,
+          faceRecognition: false,
+        },
       })
 
       setSuccess("Settings saved successfully!")
@@ -360,6 +379,8 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+
         </CardContent>
       </Card>
 
@@ -417,64 +438,173 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Check-In Methods</CardTitle>
           <CardDescription>
-            Enabled methods for attendance tracking
+            Enable or disable specific check-in methods for your organization
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[
-              { name: "QR Code", feature: "qrCheckIn" as keyof PlanFeatures },
-              { name: "Manual Entry", feature: "manualCheckIn" as keyof PlanFeatures },
-              { name: "Face Recognition", feature: "faceCheckIn" as keyof PlanFeatures },
-              { name: "Fingerprint", feature: "fingerprintCheckIn" as keyof PlanFeatures },
+              { name: "QR Code", feature: "qrCheckIn" as keyof PlanFeatures, key: "qrCode" },
+              { name: "Manual Entry", feature: "manualCheckIn" as keyof PlanFeatures, key: "manualEntry" },
+              { name: "Face Recognition", feature: "faceCheckIn" as keyof PlanFeatures, key: "faceRecognition" },
             ].map((method) => {
               const hasAccess = hasFeatureAccess(
                 organization.subscriptionTier as PlanType,
                 method.feature,
                 isDevelopment
               )
+              const isEnabled = settings.enabledCheckInMethods[method.key as keyof typeof settings.enabledCheckInMethods]
+              
               return (
                 <div
                   key={method.name}
-                  className={`flex items-center gap-3 p-3 border rounded ${
-                    hasAccess ? "bg-white" : "bg-gray-50"
+                  className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
+                    !hasAccess ? "bg-gray-50 border-gray-200" : 
+                    isEnabled ? "bg-green-50 border-green-200" : "bg-white border-gray-200"
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    id={`method-${method.name}`}
-                    checked={hasAccess}
-                    disabled={!hasAccess}
-                    className="w-4 h-4"
-                    readOnly
-                  />
-                  <label
-                    htmlFor={`method-${method.name}`}
-                    className={`flex-1 ${hasAccess ? "cursor-pointer" : "cursor-not-allowed text-gray-500"}`}
-                  >
-                    {method.name}
-                  </label>
-                  {!hasAccess && !isDevelopment && (
-                    <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-medium">
-                      Upgrade Required
-                    </span>
-                  )}
-                  {hasAccess && (
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-medium">
-                      Enabled
-                    </span>
-                  )}
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`method-${method.key}`}
+                      className={`font-medium ${hasAccess ? "cursor-pointer" : "cursor-not-allowed text-gray-500"}`}
+                    >
+                      {method.name}
+                    </label>
+                    {!hasAccess && !isDevelopment && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Upgrade to Professional or Enterprise to unlock this method
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {!hasAccess && !isDevelopment ? (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full font-medium">
+                        Upgrade Required
+                      </span>
+                    ) : (
+                      <>
+                        <span className={`text-sm font-medium ${
+                          isEnabled ? "text-green-700" : "text-gray-600"
+                        }`}>
+                          {isEnabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id={`method-${method.key}`}
+                            checked={isEnabled}
+                            onChange={(e) => {
+                              // Check if trying to disable the last enabled method
+                              const currentMethods = settings.enabledCheckInMethods
+                              const enabledCount = Object.values(currentMethods).filter(Boolean).length
+                              
+                              if (!e.target.checked && enabledCount === 1) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Cannot Disable",
+                                  description: "At least one check-in method must be enabled.",
+                                })
+                                return
+                              }
+                              
+                              setSettings(prev => ({
+                                ...prev,
+                                enabledCheckInMethods: {
+                                  ...prev.enabledCheckInMethods,
+                                  [method.key]: e.target.checked
+                                }
+                              }))
+                            }}
+                            disabled={!hasAccess}
+                            className="sr-only"
+                          />
+                          <div className={`w-11 h-6 rounded-full transition-colors ${
+                            isEnabled ? "bg-green-600" : "bg-gray-300"
+                          }`}>
+                            <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                              isEnabled ? "translate-x-5" : "translate-x-0"
+                            } mt-0.5 ml-0.5`}></div>
+                          </div>
+                        </label>
+                      </>
+                    )}
+                  </div>
                 </div>
               )
             })}
           </div>
           {!isDevelopment && organization.subscriptionTier === "starter" && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-900">
-                Upgrade to Professional or Enterprise to unlock Face Recognition and Fingerprint check-in methods.
-              </p>
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+              <Shield className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-900 mb-1">
+                  Unlock Advanced Check-In Methods
+                </p>
+                <p className="text-sm text-blue-800">
+                  Upgrade to Professional or Enterprise to enable Face Recognition for enhanced security.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                  onClick={() => setShowUpgradeModal(true)}
+                >
+                  <Crown className="w-4 h-4 mr-2" />
+                  View Plans
+                </Button>
+              </div>
             </div>
           )}
+
+          <div className="space-y-4 border-t pt-4 mt-4">
+            <h3 className="font-semibold text-gray-900">Fingerprint Verification</h3>
+            
+            <div className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
+              settings.fingerprintEnabled ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"
+            }`}>
+              <div className="flex-1">
+                <Label htmlFor="fingerprintEnabled" className="cursor-pointer font-medium">
+                  Require Fingerprint Verification
+                </Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  Staff must scan their fingerprint after QR/Manual check-in (prevents buddy punching)
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-sm font-medium ${
+                  settings.fingerprintEnabled ? "text-blue-700" : "text-gray-600"
+                }`}>
+                  {settings.fingerprintEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="fingerprintEnabled"
+                    checked={settings.fingerprintEnabled}
+                    onChange={(e) => {
+                      setSettings(prev => ({ ...prev, fingerprintEnabled: e.target.checked }))
+                    }}
+                    className="sr-only"
+                  />
+                  <div className={`w-11 h-6 rounded-full transition-colors ${
+                    settings.fingerprintEnabled ? "bg-blue-600" : "bg-gray-300"
+                  }`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                      settings.fingerprintEnabled ? "translate-x-5" : "translate-x-0"
+                    } mt-0.5 ml-0.5`}></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {settings.fingerprintEnabled && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Staff must register their fingerprints on the check-in device. 
+                  Go to Staff Management → Click "Fingerprint" button for instructions.
+                </p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

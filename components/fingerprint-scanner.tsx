@@ -70,8 +70,8 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
         authenticatorSelection: {
           authenticatorAttachment: "platform",
           userVerification: "required",
-          residentKey: "required",
-          requireResidentKey: true,
+          residentKey: "discouraged",
+          requireResidentKey: false,
         },
         timeout: 60000,
         attestation: "direct",
@@ -126,19 +126,55 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
   }
 
   const authenticateFingerprint = async () => {
+    // First, fetch the user's credential IDs from the server
+    if (!staffId) {
+      throw new Error("Staff ID is required for fingerprint authentication")
+    }
+
+    console.log("Fetching credentials for staff:", staffId)
+    
+    const credentialsResponse = await fetch("/api/biometric/fingerprint/credentials", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ staffId }),
+    })
+
+    if (!credentialsResponse.ok) {
+      throw new Error("No fingerprint registered for this staff member")
+    }
+
+    const { credentials } = await credentialsResponse.json()
+    
+    if (!credentials || credentials.length === 0) {
+      throw new Error("No fingerprint registered. Please register first.")
+    }
+
+    console.log("Found credentials, requesting authentication...")
+
     const challenge = new Uint8Array(32)
     crypto.getRandomValues(challenge)
     const challengeBase64 = btoa(String.fromCharCode(...challenge))
 
+    // Convert credential IDs to the format needed by WebAuthn
+    const allowCredentials = credentials.map((cred: any) => ({
+      id: Uint8Array.from(atob(cred.credentialId), c => c.charCodeAt(0)),
+      type: "public-key" as const,
+      transports: ["internal"] as AuthenticatorTransport[],
+    }))
+    
     const assertion = (await navigator.credentials.get({
       publicKey: {
         challenge,
         timeout: 60000,
         userVerification: "required",
         rpId: window.location.hostname,
+        allowCredentials,
       },
-      mediation: "conditional",
     })) as PublicKeyCredential
+    
+    console.log("Fingerprint scanned, got assertion")
 
     if (assertion) {
       const credentialId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)))
@@ -239,6 +275,15 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
             </Alert>
           )}
 
+          {mode === "authenticate" && !staffId && (
+            <Alert>
+              <AlertTriangle className="w-4 h-4" />
+              <AlertDescription>
+                Please enter your Staff ID or scan your QR code first before using fingerprint authentication.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {!checkWebAuthnSupport() && (
             <Alert>
               <AlertTriangle className="w-4 h-4" />
@@ -250,7 +295,7 @@ export function FingerprintScanner({ onScan, onClose, mode, staffId }: Fingerpri
             {!success && (
               <Button
                 onClick={startFingerprint}
-                disabled={isScanning || !checkWebAuthnSupport()}
+                disabled={isScanning || !checkWebAuthnSupport() || (mode === "authenticate" && !staffId)}
                 className="flex-1 bg-gradient-to-r from-accent-blue to-accent-blue-light hover:from-blue-700 hover:to-blue-600 text-white"
               >
                 {isScanning ? "Scanning..." : `${mode === "register" ? "Register" : "Scan"} Fingerprint`}

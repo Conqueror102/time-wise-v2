@@ -76,11 +76,11 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
               <div className="flex-1 bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${data?.topPerformers?.attendance?.rate}%` }}
+                  style={{ width: `${data?.topPerformers?.attendance?.attendanceRate || 0}%` }}
                 />
               </div>
               <span className="text-sm font-semibold text-blue-600">
-                {data?.topPerformers?.attendance?.rate}%
+                {data?.topPerformers?.attendance?.attendanceRate || 0}%
               </span>
             </div>
           </CardContent>
@@ -102,11 +102,11 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
               <div className="flex-1 bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-green-600 h-2 rounded-full"
-                  style={{ width: `${data?.topPerformers?.punctual?.score}%` }}
+                  style={{ width: `${data?.topPerformers?.punctual?.punctualityScore || 0}%` }}
                 />
               </div>
               <span className="text-sm font-semibold text-green-600">
-                {data?.topPerformers?.punctual?.score}%
+                {data?.topPerformers?.punctual?.punctualityScore || 0}%
               </span>
             </div>
           </CardContent>
@@ -194,21 +194,25 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              staff.punctualityScore >= 90 ? 'bg-green-600' :
-                              staff.punctualityScore >= 75 ? 'bg-yellow-600' :
-                              'bg-red-600'
-                            }`}
-                            style={{ width: `${staff.punctualityScore}%` }}
-                          />
+                      {staff.attendanceRate === 0 ? (
+                        <span className="text-sm text-gray-400 font-medium">N/A</span>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-16 bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${
+                                staff.punctualityScore >= 90 ? 'bg-green-600' :
+                                staff.punctualityScore >= 75 ? 'bg-yellow-600' :
+                                'bg-red-600'
+                              }`}
+                              style={{ width: `${staff.punctualityScore}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 w-10">
+                            {staff.punctualityScore}%
+                          </span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 w-10">
-                          {staff.punctualityScore}%
-                        </span>
-                      </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -224,6 +228,8 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
                         staff.status === 'Excellent' ? 'bg-green-100 text-green-800' :
                         staff.status === 'Good' ? 'bg-blue-100 text-blue-800' :
                         staff.status === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
+                        staff.status === 'Absent' ? 'bg-gray-100 text-gray-800' :
+                        staff.status === 'Very Poor' ? 'bg-red-200 text-red-900' :
                         'bg-red-100 text-red-800'
                       }`}>
                         {staff.status}

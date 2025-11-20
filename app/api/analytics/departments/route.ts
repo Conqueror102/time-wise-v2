@@ -81,32 +81,16 @@ export async function GET(request: NextRequest) {
         : 0
 
       // Calculate punctuality score: (on-time check-ins) / (total check-ins) × 100
+      // Only calculate if there's attendance, otherwise 0
       const punctualityScore = totalAttendance > 0
         ? Math.round(((totalAttendance - lateCount) / totalAttendance) * 100)
-        : 100
+        : 0
 
       // Calculate trend by comparing with previous period
       const previousStartDate = subtractDaysUTC(startDate, days)
       const previousStartDateStr = getUTCDateString(previousStartDate)
       
       let calculatedTrend = 0
-      try {
-        const previousRecords = attendanceRecords.filter((r) => 
-          r.department === dept.name && 
-          r.date >= previousStartDateStr && 
-          r.date < startDateStr &&
-          r.checkInTime
-        )
-        
-        const previousLateCount = previousRecords.filter((r) => r.isLate === true).length
-        const previousPunctuality = previousRecords.length > 0
-          ? ((previousRecords.length - previousLateCount) / previousRecords.length) * 100
-          : punctualityScore // Use current score if no previous data
-        
-        calculatedTrend = Math.round((punctualityScore - previousPunctuality) * 10) / 10
-      } catch (e) {
-        console.error(`Error calculating trend for department ${dept.name}:`, e)
-      }
 
       return {
         name: dept.name,
@@ -116,6 +100,42 @@ export async function GET(request: NextRequest) {
         lateCount,
         trend: calculatedTrend,
       }
+    })
+
+    // Calculate trends separately by fetching previous period data
+    const previousStartDate = subtractDaysUTC(startDate, days)
+    const previousStartDateStr = getUTCDateString(previousStartDate)
+    const previousRecords = await tenantDb.find<AttendanceLog>("attendance", {
+      date: { $gte: previousStartDateStr, $lt: startDateStr },
+    })
+
+    // Group previous records by department
+    const previousDeptMap: Record<string, AttendanceLog[]> = {}
+    previousRecords.forEach((record) => {
+      const deptName = record.department || "Unassigned"
+      if (!previousDeptMap[deptName]) {
+        previousDeptMap[deptName] = []
+      }
+      previousDeptMap[deptName].push(record)
+    })
+
+    // Update trends for each department
+    departmentData.forEach((dept) => {
+      const prevRecords = previousDeptMap[dept.name] || []
+      const prevCheckIns = prevRecords.filter((r) => r.checkInTime)
+      const prevLateCount = prevRecords.filter((r) => r.checkInTime && r.isLate === true).length
+      
+      const previousPunctuality = prevCheckIns.length > 0
+        ? ((prevCheckIns.length - prevLateCount) / prevCheckIns.length) * 100
+        : 0
+      
+      // Only calculate trend if both periods have data
+      if (dept.punctualityScore > 0 && previousPunctuality > 0) {
+        dept.trend = Math.round((dept.punctualityScore - previousPunctuality) * 10) / 10
+      } else {
+        dept.trend = 0
+      }
+
     })
 
     return NextResponse.json({

@@ -151,7 +151,18 @@ export function ManualEntryTab({
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             <span className="ml-2 text-gray-600">Checking status...</span>
           </div>
-        ) : attendanceStatus?.hasCheckedOut ? (
+        ) : !staffId.trim() ? (
+          // No staff ID entered - show prompt
+          <div className="text-center py-4">
+            <p className="text-gray-500 text-sm">Enter your Staff ID above to continue</p>
+          </div>
+        ) : !attendanceStatus ? (
+          // Staff ID entered but status not checked yet - show nothing or prompt
+          <div className="text-center py-4">
+            <p className="text-gray-500 text-sm">Checking your status...</p>
+          </div>
+        ) : attendanceStatus.hasCheckedOut ? (
+          // Already checked out
           <div className="text-center py-4">
             <p className="text-gray-600 mb-2">All done for today!</p>
             <Button
@@ -164,12 +175,12 @@ export function ManualEntryTab({
               Check Another Staff Member
             </Button>
           </div>
-        ) : attendanceStatus?.hasCheckedIn ? (
-          // Only show check-out button
+        ) : attendanceStatus.hasCheckedIn ? (
+          // Checked in - show ONLY check-out button
           <Button
             data-action="check-out"
             onClick={() => onCheckIn("check-out")}
-            disabled={loading || !staffId.trim()}
+            disabled={loading}
             className="h-12 bg-blue-600 hover:bg-blue-700 w-full"
           >
             {loading ? (
@@ -181,12 +192,12 @@ export function ManualEntryTab({
               </>
             )}
           </Button>
-        ) : attendanceStatus && !attendanceStatus.hasCheckedIn ? (
-          // Only show check-in button
+        ) : (
+          // Not checked in - show ONLY check-in button
           <Button
             data-action="check-in"
             onClick={() => onCheckIn("check-in")}
-            disabled={loading || !staffId.trim()}
+            disabled={loading}
             className="h-12 bg-green-600 hover:bg-green-700 w-full"
           >
             {loading ? (
@@ -198,40 +209,6 @@ export function ManualEntryTab({
               </>
             )}
           </Button>
-        ) : (
-          // Show both buttons when status is unknown (no staff ID entered yet)
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              data-action="check-in"
-              onClick={() => onCheckIn("check-in")}
-              disabled={loading || !staffId.trim()}
-              className="h-12 bg-green-600 hover:bg-green-700"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Clock className="w-4 h-4 mr-2" />
-                  Check In
-                </>
-              )}
-            </Button>
-            <Button
-              data-action="check-out"
-              onClick={() => onCheckIn("check-out")}
-              disabled={loading || !staffId.trim()}
-              className="h-12 bg-blue-600 hover:bg-blue-700"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Clock className="w-4 h-4 mr-2" />
-                  Check Out
-                </>
-              )}
-            </Button>
-          </div>
         )}
       </div>
     </div>

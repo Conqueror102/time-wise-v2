@@ -61,15 +61,26 @@ export async function GET(request: NextRequest) {
         : 0
 
       // Punctuality score: (on-time arrivals / total check-ins) × 100
+      // Only calculate if they have attendance, otherwise N/A (0)
       const punctualityScore = totalAttendance > 0
         ? Math.round(((totalAttendance - lateCount) / totalAttendance) * 100)
-        : 100
+        : 0
 
-      // Determine status based on both metrics
-      let status = "Poor"
-      if (attendanceRate >= 90 && punctualityScore >= 90) status = "Excellent"
-      else if (attendanceRate >= 75 && punctualityScore >= 75) status = "Good"
-      else if (attendanceRate >= 60 || punctualityScore >= 60) status = "Fair"
+      // Determine status based on attendance primarily
+      let status = "Absent"
+      if (totalAttendance === 0 || attendanceRate === 0) {
+        status = "Absent"
+      } else if (attendanceRate >= 90 && punctualityScore >= 90) {
+        status = "Excellent"
+      } else if (attendanceRate >= 75 && punctualityScore >= 75) {
+        status = "Good"
+      } else if (attendanceRate >= 50) {
+        status = "Fair"
+      } else if (attendanceRate >= 25) {
+        status = "Poor"
+      } else if (attendanceRate > 0) {
+        status = "Very Poor"
+      }
 
       return {
         staffId: member.staffId,
@@ -82,18 +93,42 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Sort by attendance rate
-    staffData.sort((a, b) => b.attendanceRate - a.attendanceRate)
+    // Sort by attendance rate (with secondary sort by punctuality for ties)
+    staffData.sort((a, b) => {
+      if (b.attendanceRate !== a.attendanceRate) {
+        return b.attendanceRate - a.attendanceRate
+      }
+      return b.punctualityScore - a.punctualityScore
+    })
 
-    // Get top performers
+    // Get top performers - only from staff who actually attended
+    const staffWithAttendance = staffData.filter(s => s.attendanceRate > 0)
+    
+    // Best attendance (with punctuality as tiebreaker)
+    const bestAttendance = staffWithAttendance[0] || null
+    
+    // Most punctual (with attendance as tiebreaker)
+    const mostPunctual = [...staffWithAttendance].sort((a, b) => {
+      if (b.punctualityScore !== a.punctualityScore) {
+        return b.punctualityScore - a.punctualityScore
+      }
+      return b.attendanceRate - a.attendanceRate
+    })[0] || null
+    
     const topPerformers = {
-      attendance: staffData[0] || null,
-      punctual: [...staffData].sort((a, b) => b.punctualityScore - a.punctualityScore)[0] || null,
+      attendance: bestAttendance,
+      punctual: mostPunctual,
     }
 
-    // Get staff needing attention
-    const needsAttention = [...staffData]
-      .sort((a, b) => b.lateCount - a.lateCount)[0] || null
+    // Get staff needing attention - most late arrivals (with attendance as tiebreaker)
+    const needsAttention = [...staffWithAttendance]
+      .filter(s => s.lateCount > 0)
+      .sort((a, b) => {
+        if (b.lateCount !== a.lateCount) {
+          return b.lateCount - a.lateCount
+        }
+        return a.attendanceRate - b.attendanceRate // Lower attendance is worse
+      })[0] || null
 
     return NextResponse.json({
       staff: staffData,

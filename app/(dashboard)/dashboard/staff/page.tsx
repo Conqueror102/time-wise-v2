@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from "react"
-import { Plus, Search, Edit, Trash2, QrCode, Crown, AlertCircle } from "lucide-react"
+import { Plus, Search, Edit, Trash2, QrCode, Crown, AlertCircle, Fingerprint } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,6 +44,7 @@ export default function StaffPage() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showQRDialog, setShowQRDialog] = useState(false)
+  const [showFingerprintDialog, setShowFingerprintDialog] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [organization, setOrganization] = useState<any>(null)
   const isDevelopment = process.env.NODE_ENV === "development"
@@ -375,6 +376,18 @@ export default function StaffPage() {
                       <QrCode className="w-4 h-4 mr-1" />
                       QR
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedStaff(s)
+                        setShowFingerprintDialog(true)
+                      }}
+                      title="Register Fingerprint"
+                    >
+                      <Fingerprint className="w-4 h-4 mr-1" />
+                      Fingerprint
+                    </Button>
                     <QRDownloadButton
                       qrCodeUrl={s.qrCode}
                       staffName={s.name}
@@ -490,6 +503,97 @@ export default function StaffPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Fingerprint Registration Dialog */}
+      <Dialog open={showFingerprintDialog} onOpenChange={setShowFingerprintDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Fingerprint className="w-5 h-5" />
+              Register Fingerprint for {selectedStaff?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Staff ID: {selectedStaff?.staffId}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Important: Device-Specific Registration
+              </h4>
+              <p className="text-sm text-blue-800">
+                Fingerprints must be registered on the <strong>same device</strong> that will be used for check-in/out (e.g., the kiosk tablet at the entrance).
+              </p>
+              <p className="text-sm text-blue-800 mt-2">
+                To register:
+              </p>
+              <ol className="text-sm text-blue-800 mt-1 ml-4 list-decimal space-y-1">
+                <li>Go to the check-in device</li>
+                <li>Visit: <code className="bg-blue-100 px-1 rounded">/register-biometric</code></li>
+                <li>Enter Staff ID: <strong>{selectedStaff?.staffId}</strong></li>
+                <li>Follow the fingerprint registration process</li>
+                <li>
+                  <strong>If you're on the check-in device now:</strong>{" "}
+                  <a
+                    href={`/register-biometric?staffId=${selectedStaff?.staffId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Register fingerprint directly
+                  </a>
+                </li>
+              </ol>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> Fingerprints registered on this admin device will NOT work on the check-in kiosk.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  // Copy staff ID to clipboard
+                  navigator.clipboard.writeText(selectedStaff?.staffId || "")
+                  toast({
+                    title: "Copied!",
+                    description: "Staff ID copied to clipboard",
+                  })
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Copy Staff ID
+              </Button>
+              <Button
+                onClick={() => {
+                  // Copy registration URL
+                  const url = `${window.location.origin}/register-biometric?staffId=${selectedStaff?.staffId}`
+                  navigator.clipboard.writeText(url)
+                  toast({
+                    title: "Copied!",
+                    description: "Registration URL copied to clipboard",
+                  })
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Copy URL
+              </Button>
+              <Button
+                onClick={() => setShowFingerprintDialog(false)}
+                className="flex-1"
+              >
+                Got It
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

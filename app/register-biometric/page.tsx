@@ -5,7 +5,7 @@
  * Staff members can register their fingerprint and face
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Fingerprint, ScanFace, CheckCircle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,8 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FingerprintScanner } from "@/components/fingerprint-scanner"
 import { FaceRecognition } from "@/components/face-recognition"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 
 export default function RegisterBiometricPage() {
+  const searchParams = useSearchParams()
   const [step, setStep] = useState<"verify" | "register">("verify")
   const [staffId, setStaffId] = useState("")
   const [verifying, setVerifying] = useState(false)
@@ -25,14 +27,22 @@ export default function RegisterBiometricPage() {
   const [registeredFingerprint, setRegisteredFingerprint] = useState(false)
   const [registeredFace, setRegisteredFace] = useState(false)
 
-  const handleVerifyStaff = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Extract staffId from URL parameter and auto-verify
+  useEffect(() => {
+    const urlStaffId = searchParams.get("staffId")
+    if (urlStaffId) {
+      setStaffId(urlStaffId.toUpperCase())
+      // Auto-verify the staff ID
+      verifyStaffById(urlStaffId.toUpperCase())
+    }
+  }, [searchParams])
+
+  const verifyStaffById = async (id: string) => {
     setVerifying(true)
     setError("")
 
     try {
-      // Verify staff exists
-      const response = await fetch(`/api/staff/verify?staffId=${staffId}`)
+      const response = await fetch(`/api/staff/verify?staffId=${id}`)
       const data = await response.json()
 
       if (!response.ok) {
@@ -46,6 +56,11 @@ export default function RegisterBiometricPage() {
     } finally {
       setVerifying(false)
     }
+  }
+
+  const handleVerifyStaff = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await verifyStaffById(staffId)
   }
 
   const handleFingerprintRegistered = () => {

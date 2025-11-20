@@ -13,6 +13,13 @@ interface UnlockScreenProps {
     tenantId: string
     organizationName: string
     capturePhotos: boolean
+    fingerprintEnabled?: boolean
+    isInTrial?: boolean
+    enabledCheckInMethods?: {
+      qrCode: boolean
+      manualEntry: boolean
+      faceRecognition: boolean
+    }
   }) => void
 }
 
@@ -52,12 +59,22 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
       sessionStorage.setItem("checkInTenantId", data.tenantId)
       sessionStorage.setItem("checkInOrgName", data.organizationName)
       sessionStorage.setItem("capturePhotos", capturePhotosValue ? "true" : "false")
+      sessionStorage.setItem("fingerprintEnabled", data.fingerprintEnabled ? "true" : "false")
+      sessionStorage.setItem("isInTrial", data.isInTrial ? "true" : "false")
+      sessionStorage.setItem("enabledCheckInMethods", JSON.stringify(data.enabledCheckInMethods || {
+        qrCode: true,
+        manualEntry: true,
+        faceRecognition: false,
+      }))
       sessionStorage.setItem("settingsTimestamp", timestamp)
 
       onUnlock({
         tenantId: data.tenantId,
         organizationName: data.organizationName,
         capturePhotos: capturePhotosValue,
+        fingerprintEnabled: data.fingerprintEnabled,
+        isInTrial: data.isInTrial,
+        enabledCheckInMethods: data.enabledCheckInMethods,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid credentials")

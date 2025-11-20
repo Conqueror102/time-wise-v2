@@ -26,6 +26,8 @@ export async function PATCH(request: NextRequest) {
       checkInPasscode,
       capturePhotos,
       photoRetentionDays,
+      fingerprintEnabled,
+      enabledCheckInMethods,
     } = body
 
     const db = await getDatabase()
@@ -47,6 +49,8 @@ export async function PATCH(request: NextRequest) {
     if (checkInPasscode !== undefined) updateData["settings.checkInPasscode"] = checkInPasscode
     if (capturePhotos !== undefined) updateData["settings.capturePhotos"] = capturePhotos
     if (photoRetentionDays !== undefined) updateData["settings.photoRetentionDays"] = photoRetentionDays
+    if (fingerprintEnabled !== undefined) updateData["settings.fingerprintEnabled"] = fingerprintEnabled
+    if (enabledCheckInMethods !== undefined) updateData["settings.enabledCheckInMethods"] = enabledCheckInMethods
 
     console.log("Update data being saved:", updateData)
     console.log("=== END SETTINGS DEBUG ===")

@@ -73,17 +73,41 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
     ],
   }
 
+  // Create a dataset for each department with different colors (12 colors to reduce repetition)
+  const colors = [
+    { bg: "rgba(37, 99, 235, 0.2)", border: "#2563eb" },     // Blue
+    { bg: "rgba(16, 185, 129, 0.2)", border: "#10b981" },    // Green
+    { bg: "rgba(245, 158, 11, 0.2)", border: "#f59e0b" },    // Orange
+    { bg: "rgba(139, 92, 246, 0.2)", border: "#8b5cf6" },    // Purple
+    { bg: "rgba(236, 72, 153, 0.2)", border: "#ec4899" },    // Pink
+    { bg: "rgba(6, 182, 212, 0.2)", border: "#06b6d4" },     // Cyan
+    { bg: "rgba(239, 68, 68, 0.2)", border: "#ef4444" },     // Red
+    { bg: "rgba(251, 191, 36, 0.2)", border: "#fbbf24" },    // Yellow
+    { bg: "rgba(99, 102, 241, 0.2)", border: "#6366f1" },    // Indigo
+    { bg: "rgba(20, 184, 166, 0.2)", border: "#14b8a6" },    // Teal
+    { bg: "rgba(244, 63, 94, 0.2)", border: "#f43f5e" },     // Rose
+    { bg: "rgba(132, 204, 22, 0.2)", border: "#84cc16" },    // Lime
+  ]
+
   const radarData = {
-    labels: data?.departments?.map((d: any) => d.name) || [],
-    datasets: [
-      {
-        label: "Punctuality Score",
-        data: data?.departments?.map((d: any) => d.punctualityScore) || [],
-        backgroundColor: "rgba(37, 99, 235, 0.2)",
-        borderColor: "#2563eb",
-        borderWidth: 2,
-      },
-    ],
+    labels: ["Attendance", "Punctuality", "Consistency", "Reliability", "Performance"],
+    datasets: data?.departments?.map((dept: any, index: number) => ({
+      label: dept.name,
+      data: [
+        dept.attendanceRate,
+        dept.punctualityScore,
+        dept.attendanceRate, // Consistency (using attendance as proxy)
+        dept.punctualityScore, // Reliability (using punctuality as proxy)
+        Math.round((dept.attendanceRate + dept.punctualityScore) / 2), // Overall performance
+      ],
+      backgroundColor: colors[index % colors.length].bg,
+      borderColor: colors[index % colors.length].border,
+      borderWidth: 2,
+      pointBackgroundColor: colors[index % colors.length].border,
+      pointBorderColor: "#fff",
+      pointHoverBackgroundColor: "#fff",
+      pointHoverBorderColor: colors[index % colors.length].border,
+    })) || [],
   }
 
   const chartOptions = {
@@ -123,20 +147,43 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
     },
   }
 
+  // Sort departments by overall performance (attendance + punctuality) and get top 3
+  const topDepartments = data?.departments
+    ?.map((dept: any) => ({
+      ...dept,
+      overallScore: Math.round((dept.attendanceRate + dept.punctualityScore) / 2)
+    }))
+    .sort((a: any, b: any) => b.overallScore - a.overallScore)
+    .slice(0, 3) || []
+
   return (
     <div className="space-y-6">
-      {/* Department Cards */}
+      {/* Top 3 Department Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {data?.departments?.slice(0, 3).map((dept: any, index: number) => (
+        {topDepartments.map((dept: any, index: number) => (
           <Card key={index} className="border-gray-200 hover:shadow-lg transition-shadow duration-200">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">{dept.name}</p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-medium text-gray-600">{dept.name}</p>
+                    <span className="text-lg">
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                    </span>
+                  </div>
                   <p className="text-2xl font-bold text-gray-900">{dept.staffCount} Staff</p>
+                  <p className="text-xs text-gray-500 mt-1">Overall: {dept.overallScore}%</p>
                 </div>
-                <div className="p-3 rounded-lg bg-blue-50">
-                  <Users className="w-5 h-5 text-blue-600" />
+                <div className={`p-3 rounded-lg ${
+                  index === 0 ? 'bg-yellow-50' :
+                  index === 1 ? 'bg-gray-100' :
+                  'bg-orange-50'
+                }`}>
+                  <Users className={`w-5 h-5 ${
+                    index === 0 ? 'text-yellow-600' :
+                    index === 1 ? 'text-gray-600' :
+                    'text-orange-600'
+                  }`} />
                 </div>
               </div>
               
@@ -154,14 +201,18 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
                 
                 <div className="flex items-center justify-between mt-3">
                   <span className="text-sm text-gray-600">Punctuality</span>
-                  <span className="text-sm font-semibold text-gray-900">{dept.punctualityScore}%</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {dept.attendanceRate === 0 ? 'N/A' : `${dept.punctualityScore}%`}
+                  </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${dept.punctualityScore}%` }}
-                  />
-                </div>
+                {dept.attendanceRate > 0 && (
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${dept.punctualityScore}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -185,32 +236,59 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
         <Card className="border-gray-200 hover:shadow-lg transition-shadow duration-200">
           <CardHeader>
             <CardTitle className="text-gray-900">Punctuality Comparison</CardTitle>
-            <CardDescription>Department punctuality scores</CardDescription>
+            <CardDescription>Department punctuality scores (spider chart)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <Radar
-                data={radarData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    r: {
-                      beginAtZero: true,
-                      max: 100,
-                      ticks: {
-                        stepSize: 20,
+            {data?.departments?.length >= 3 ? (
+              <div className="h-80">
+                <Radar
+                  data={radarData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                          stepSize: 20,
+                        },
+                        grid: {
+                          color: '#e5e7eb',
+                        },
                       },
                     },
-                  },
-                  plugins: {
-                    legend: {
-                      position: "top" as const,
+                    plugins: {
+                      legend: {
+                        position: "top" as const,
+                        labels: {
+                          font: {
+                            size: 12,
+                          },
+                        },
+                      },
+                      tooltip: {
+                        backgroundColor: "#1f2937",
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                          label: function(context) {
+                            return `${context.label}: ${context.parsed.r}%`
+                          }
+                        }
+                      },
                     },
-                  },
-                }}
-              />
-            </div>
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <p className="text-sm mb-2">Need at least 3 departments to display radar chart</p>
+                  <p className="text-xs">Add more departments to see comparison</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -249,13 +327,17 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        dept.punctualityScore >= 90 ? 'bg-green-100 text-green-800' :
-                        dept.punctualityScore >= 75 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {dept.punctualityScore}%
-                      </span>
+                      {dept.attendanceRate === 0 ? (
+                        <span className="text-sm text-gray-400 font-medium">N/A</span>
+                      ) : (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          dept.punctualityScore >= 90 ? 'bg-green-100 text-green-800' :
+                          dept.punctualityScore >= 75 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {dept.punctualityScore}%
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600 text-center">{dept.lateCount}</td>
                     <td className="py-3 px-4 text-center">

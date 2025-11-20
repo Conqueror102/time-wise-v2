@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
@@ -29,6 +30,12 @@ export async function GET(request: NextRequest) {
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
+    // Get organization settings for expected work time
+    const organization = await db.collection("organizations").findOne({
+      _id: new ObjectId(context.tenantId),
+    })
+    const latenessTime = organization?.settings?.latenessTime || "09:00"
+
     // Get all attendance records in range
     const allRecords = await tenantDb.find<AttendanceLog>("attendance", {
       date: { $gte: startDateStr },
@@ -45,8 +52,18 @@ export async function GET(request: NextRequest) {
     let totalDelay = 0
 
     lateRecords.forEach((record) => {
-      // Calculate delay in minutes (simplified - you may need to adjust based on your shift times)
-      const delay = 30 // Placeholder - calculate actual delay based on expected time
+      // Calculate actual delay in minutes
+      let delay = 0
+      if (record.checkInTime && latenessTime) {
+        const checkInDate = new Date(record.checkInTime)
+        const [hours, minutes] = latenessTime.split(':').map(Number)
+        const expectedDate = new Date(record.checkInTime)
+        expectedDate.setHours(hours, minutes, 0, 0)
+        
+        // Calculate delay in minutes
+        delay = Math.max(0, Math.round((checkInDate.getTime() - expectedDate.getTime()) / (1000 * 60)))
+      }
+      
       totalDelay += delay
 
       if (delay <= 15) distribution[0]++
@@ -87,17 +104,41 @@ export async function GET(request: NextRequest) {
     const trend = Math.round((currentRate - previousRate) * 10) / 10
 
     // Recent late arrivals for table
-    const recentLate = lateRecords.slice(0, 20).map((record) => ({
-      staffName: record.staffName || record.staffId,
-      department: record.department || "N/A",
-      date: record.date,
-      expectedTime: "09:00 AM", // Placeholder - get from shift settings
-      actualTime: new Date(record.checkInTime || record.timestamp).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      delay: 30, // Placeholder - calculate actual delay
-    }))
+    const recentLate = lateRecords
+      .sort((a, b) => new Date(b.checkInTime || b.timestamp).getTime() - new Date(a.checkInTime || a.timestamp).getTime())
+      .slice(0, 20)
+      .map((record) => {
+        // Calculate actual delay
+        let delay = 0
+        if (record.checkInTime && latenessTime) {
+          const checkInDate = new Date(record.checkInTime)
+          const [hours, minutes] = latenessTime.split(':').map(Number)
+          const expectedDate = new Date(record.checkInTime)
+          expectedDate.setHours(hours, minutes, 0, 0)
+          delay = Math.max(0, Math.round((checkInDate.getTime() - expectedDate.getTime()) / (1000 * 60)))
+        }
+
+        // Format expected time
+        const [hours, minutes] = latenessTime.split(':').map(Number)
+        const expectedDate = new Date()
+        expectedDate.setHours(hours, minutes, 0, 0)
+        const expectedTime = expectedDate.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+
+        return {
+          staffName: record.staffName || record.staffId,
+          department: record.department || "N/A",
+          date: record.date,
+          expectedTime,
+          actualTime: new Date(record.checkInTime || record.timestamp).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          delay,
+        }
+      })
 
     return NextResponse.json({
       totalLate: lateRecords.length,

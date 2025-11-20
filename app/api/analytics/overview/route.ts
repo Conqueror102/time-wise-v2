@@ -44,9 +44,11 @@ export async function GET(request: NextRequest) {
     const lateArrivals = attendanceRecords.filter((r) => r.checkInTime && r.isLate === true).length
     const earlyDepartures = attendanceRecords.filter((r) => r.checkOutTime && r.isEarly === true).length
 
-    // Calculate average attendance rate
-    const uniqueStaffAttended = new Set(recordsWithCheckIn.map((r) => r.staffId)).size
-    const averageAttendanceRate = totalStaff > 0 ? Math.round((uniqueStaffAttended / totalStaff) * 100) : 0
+    // Calculate average attendance rate: (total check-ins / (total staff × days)) × 100
+    const expectedCheckIns = totalStaff * days
+    const averageAttendanceRate = expectedCheckIns > 0 
+      ? Math.round((totalAttendance / expectedCheckIns) * 100) 
+      : 0
 
     // Calculate absentees (staff who haven't checked in today)
     const today = new Date().toISOString().split("T")[0]
@@ -64,17 +66,18 @@ export async function GET(request: NextRequest) {
     })
 
     const previousRecordsWithCheckIn = previousRecords.filter((r) => r.checkInTime)
-    const previousAttendanceRate = totalStaff > 0
-      ? (new Set(previousRecordsWithCheckIn.map((r) => r.staffId)).size / totalStaff) * 100
+    const previousExpectedCheckIns = totalStaff * days
+    const previousAttendanceRate = previousExpectedCheckIns > 0
+      ? (previousRecordsWithCheckIn.length / previousExpectedCheckIns) * 100
       : 0
     const attendanceTrend = averageAttendanceRate - previousAttendanceRate
 
     const previousLateCount = previousRecords.filter((r) => r.checkInTime && r.isLate === true).length
-    const previousLateRate = previousRecordsWithCheckIn.length > 0
-      ? (previousLateCount / previousRecordsWithCheckIn.length) * 100
-      : 0
-    const currentLateRate = totalAttendance > 0 ? (lateArrivals / totalAttendance) * 100 : 0
-    const latenessTrend = currentLateRate - previousLateRate
+    
+    // Calculate lateness trend as percentage change in COUNT (not rate)
+    const latenessTrend = previousLateCount > 0
+      ? Math.round(((lateArrivals - previousLateCount) / previousLateCount) * 100)
+      : (lateArrivals > 0 ? 100 : 0) // If no previous lates but have current lates, show 100% increase
 
     return NextResponse.json({
       totalStaff,
