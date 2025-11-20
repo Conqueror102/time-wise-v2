@@ -5,7 +5,7 @@
  * Staff members can register their fingerprint and face
  */
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Fingerprint, ScanFace, CheckCircle, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,7 @@ import { FaceRecognition } from "@/components/face-recognition"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 
-export default function RegisterBiometricPage() {
+function RegisterBiometricContent() {
   const searchParams = useSearchParams()
   const [step, setStep] = useState<"verify" | "register">("verify")
   const [staffId, setStaffId] = useState("")
@@ -328,5 +328,17 @@ export default function RegisterBiometricPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function RegisterBiometricPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <RegisterBiometricContent />
+    </Suspense>
   )
 }

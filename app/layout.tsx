@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: 'TimeWise - Smart Attendance Management',
+  description: 'Modern attendance tracking system with QR codes, biometric authentication, and real-time analytics',
 }
 
 export default function RootLayout({
