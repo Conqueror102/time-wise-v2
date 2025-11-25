@@ -63,6 +63,26 @@ export async function PATCH(
       allowedRoles: ["org_admin", "manager"],
     })
 
+    // Check feature access (unless in development mode)
+    const isDevelopment = process.env.NODE_ENV === "development"
+    if (!isDevelopment) {
+      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
+      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
+      
+      const subscription = await getSubscriptionStatus(context.tenantId)
+      
+      // Check if can edit staff
+      if (!hasFeatureAccess(subscription.plan as any, "canEditStaff", subscription.isTrialActive, isDevelopment)) {
+        return NextResponse.json(
+          { 
+            error: "Your trial has expired. Upgrade to Professional or Enterprise to edit staff members.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     const body = await request.json()
     const { name, email, department, position, isActive } = body
 

@@ -66,7 +66,7 @@ export default function RegisterPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <Building2 className="w-8 h-8 text-blue-600" />
-            <span className="text-2xl font-bold text-gray-900">ClockIn ERP</span>
+            <span className="text-2xl font-bold text-gray-900">TimeWise</span>
           </Link>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Create Your Organization

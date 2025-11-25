@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
     const newOrganization = {
       name,
       adminEmail,
-      subscriptionTier: "free",
-      subscriptionStatus: "active",
-      allowedMethods: ["manual"],
+      subscriptionTier: "starter",
+      subscriptionStatus: "trial",
+      allowedMethods: ["manual", "qr"],
       settings: {
         latenessTime: "09:00",
         workEndTime: "17:00",

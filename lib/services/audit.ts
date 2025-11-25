@@ -8,6 +8,7 @@ import {
   PaginatedAuditLogs,
 } from "@/lib/types/super-admin"
 import { ObjectId } from "mongodb"
+import { escapeRegex } from "@/lib/utils/regex"
 
 /**
  * Parameters for creating an audit log

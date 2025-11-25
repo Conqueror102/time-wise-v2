@@ -196,13 +196,16 @@ export default function LandingPage() {
                 <div className="mb-6">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Starter</h3>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-gray-900">₦0</span>
-                    <span className="text-gray-600">/month</span>
+                    <span className="text-5xl font-bold text-green-600">Free</span>
                   </div>
-                  <p className="text-gray-600 mt-2">Perfect for small teams</p>
+                  <p className="text-gray-600 mt-2">14-day trial • Max 10 staff</p>
                 </div>
                 
                 <ul className="space-y-4 mb-8">
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">All features unlocked for 14 days</span>
+                  </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">Up to 10 staff members</span>
@@ -213,17 +216,16 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Basic reports</span>
+                    <span className="text-gray-700">Photo verification</span>
                   </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Email support</span>
+                  <li className="flex items-start gap-3 opacity-50">
+                    <span className="text-gray-500 text-sm">After trial: Basic check-in only</span>
                   </li>
                 </ul>
                 
-                <Link href="/pricing">
+                <Link href="/register">
                   <Button className="w-full h-12 font-medium" variant="outline">
-                    Get Started Free
+                    Start Free Trial
                   </Button>
                 </Link>
               </CardContent>
@@ -238,7 +240,7 @@ export default function LandingPage() {
                 <div className="mb-6">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Professional</h3>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-gray-900">₦29k</span>
+                    <span className="text-5xl font-bold text-gray-900">₦5k</span>
                     <span className="text-gray-600">/month</span>
                   </div>
                   <p className="text-gray-600 mt-2">For growing businesses</p>
@@ -251,19 +253,23 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">All check-in methods</span>
+                    <span className="text-gray-700">Photo verification</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Advanced analytics</span>
+                    <span className="text-gray-700">Basic analytics & reports</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">Attendance history</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">CSV export</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">Priority support</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Export to CSV/Excel</span>
                   </li>
                 </ul>
                 
@@ -281,7 +287,7 @@ export default function LandingPage() {
                 <div className="mb-6">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Enterprise</h3>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-gray-900">₦99k</span>
+                    <span className="text-5xl font-bold text-gray-900">₦10k</span>
                     <span className="text-gray-600">/month</span>
                   </div>
                   <p className="text-gray-600 mt-2">For large organizations</p>
@@ -294,25 +300,29 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Custom branding</span>
+                    <span className="text-gray-700">Fingerprint verification</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">API access</span>
+                    <span className="text-gray-700">Photo verification</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Dedicated support</span>
+                    <span className="text-gray-700">Advanced analytics</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Custom integrations</span>
+                    <span className="text-gray-700">Full reports & history</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">Priority support</span>
                   </li>
                 </ul>
                 
                 <Link href="/register">
                   <Button className="w-full h-12 font-medium" variant="outline">
-                    Contact Sales
+                    Get Started
                   </Button>
                 </Link>
               </CardContent>

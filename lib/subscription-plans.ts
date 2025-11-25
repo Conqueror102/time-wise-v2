@@ -1,74 +1,105 @@
-import type { SubscriptionPlan } from "./models"
+/**
+ * Subscription Plans Configuration
+ * Defines the 3-tier pricing structure
+ */
+
+export interface SubscriptionPlan {
+  id: string
+  name: string
+  price: number
+  interval: string
+  features: string[]
+  maxStaff: number
+  allowedMethods: string[]
+  paystackPlanCode: string | null
+}
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: "free",
-    name: "Free",
+    id: "starter",
+    name: "Starter",
     price: 0,
     interval: "month",
-    features: ["Manual ID check-in only", "Up to 10 staff members", "Basic attendance reports", "Email support"],
+    features: [
+      "Free 14-day trial",
+      "Up to 10 staff members",
+      "ALL features unlocked during trial",
+      "Photo & Fingerprint verification (trial)",
+      "Full analytics & reports (trial)",
+      "Basic check-in after trial",
+    ],
     maxStaff: 10,
-    allowedMethods: ["manual"],
-    stripePriceId: "",
+    allowedMethods: ["manual", "qr"],
+    paystackPlanCode: null,
   },
   {
-    id: "basic",
-    name: "Basic",
-    price: 29,
+    id: "professional",
+    name: "Professional",
+    price: 5000,
     interval: "month",
     features: [
-      "Manual ID + QR Code check-in",
       "Up to 50 staff members",
-      "Advanced attendance reports",
+      "Photo verification",
+      "Overview & Lateness analytics",
+      "Attendance history",
+      "Reports access",
       "CSV export",
-      "Priority email support",
+      "Priority support",
     ],
     maxStaff: 50,
-    allowedMethods: ["manual", "qr"],
-    stripePriceId: "price_basic_monthly",
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: 79,
-    interval: "month",
-    features: [
-      "All Basic features",
-      "Fingerprint authentication",
-      "Up to 200 staff members",
-      "Real-time dashboard",
-      "API access",
-      "Phone support",
-    ],
-    maxStaff: 200,
-    allowedMethods: ["manual", "qr", "fingerprint"],
-    stripePriceId: "price_premium_monthly",
+    allowedMethods: ["manual", "qr", "photo"],
+    paystackPlanCode: "PLN_professional_monthly",
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    price: 199,
+    price: 10000,
     interval: "month",
     features: [
-      "All Premium features",
-      "Face recognition",
       "Unlimited staff members",
-      "Custom integrations",
-      "Dedicated account manager",
-      "24/7 phone support",
-      "Choose preferred auth method",
+      "Fingerprint verification",
+      "Photo verification",
+      "All analytics tabs",
+      "Advanced insights",
+      "Full reports & history",
+      "CSV export",
+      "Priority support",
     ],
     maxStaff: -1, // unlimited
-    allowedMethods: ["manual", "qr", "fingerprint", "face"],
-    stripePriceId: "price_enterprise_monthly",
+    allowedMethods: ["manual", "qr", "photo", "fingerprint"],
+    paystackPlanCode: "PLN_enterprise_monthly",
   },
 ]
 
+/**
+ * Get plan by tier ID
+ */
 export function getPlanByTier(tier: string): SubscriptionPlan | undefined {
   return SUBSCRIPTION_PLANS.find((plan) => plan.id === tier)
 }
 
+/**
+ * Check if a plan allows a specific check-in method
+ */
 export function canUseMethod(tier: string, method: string): boolean {
   const plan = getPlanByTier(tier)
-  return plan ? plan.allowedMethods.includes(method as any) : false
+  return plan ? plan.allowedMethods.includes(method) : false
+}
+
+/**
+ * Get plan price in Naira
+ */
+export function getPlanPrice(tier: string): number {
+  const plan = getPlanByTier(tier)
+  return plan ? plan.price : 0
+}
+
+/**
+ * Get formatted plan price
+ */
+export function getFormattedPrice(tier: string): string {
+  const plan = getPlanByTier(tier)
+  if (!plan) return "Free"
+  if (plan.price === 0) return "Free"
+  return `₦${plan.price.toLocaleString()}`
 }

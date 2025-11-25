@@ -10,9 +10,10 @@ import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 export interface Subscription {
   _id?: ObjectId
   organizationId: string
-  plan: "free_trial" | "starter" | "professional" | "enterprise"
+  plan: "starter" | "professional" | "enterprise"
   status: "active" | "cancelled" | "expired" | "past_due"
   trialEndDate: Date | null
+  isTrialActive: boolean
   subscriptionStartDate: Date
   subscriptionEndDate: Date | null
   paystackSubscriptionCode: string | null
@@ -21,12 +22,18 @@ export interface Subscription {
   nextPaymentDate: Date | null
   amount: number
   currency: string
+  scheduledDowngrade?: {
+    targetPlan: "starter" | "professional" | "enterprise"
+    scheduledFor: Date
+    requestedAt: Date
+  }
   createdAt: Date
   updatedAt: Date
 }
 
 /**
- * Create initial free trial subscription
+ * Create initial starter subscription with 14-day trial
+ * All features unlocked during trial (except fingerprint)
  */
 export async function createTrialSubscription(organizationId: string): Promise<Subscription> {
   const db = await getDatabase()
@@ -36,9 +43,10 @@ export async function createTrialSubscription(organizationId: string): Promise<S
 
   const subscription: Subscription = {
     organizationId,
-    plan: "free_trial",
+    plan: "starter",
     status: "active",
     trialEndDate,
+    isTrialActive: true,
     subscriptionStartDate: now,
     subscriptionEndDate: null,
     paystackSubscriptionCode: null,
@@ -129,16 +137,16 @@ export async function checkExpiredSubscriptions(): Promise<void> {
   const db = await getDatabase()
   const now = new Date()
 
-  // Expire trials
+  // Mark starter trials as expired (but keep status active - they can still use basic features)
   await db.collection("subscriptions").updateMany(
     {
-      plan: "free_trial",
-      status: "active",
+      plan: "starter",
+      isTrialActive: true,
       trialEndDate: { $lt: now },
     },
     {
       $set: {
-        status: "expired",
+        isTrialActive: false,
         updatedAt: now,
       },
     }
@@ -158,12 +166,90 @@ export async function checkExpiredSubscriptions(): Promise<void> {
       },
     }
   )
+
+  // Process scheduled downgrades
+  await processScheduledDowngrades()
 }
 
 /**
- * Downgrade to starter after trial expiry
+ * Process scheduled downgrades
  */
-export async function downgradeToStarter(organizationId: string): Promise<void> {
+export async function processScheduledDowngrades(): Promise<void> {
+  const db = await getDatabase()
+  const now = new Date()
+
+  // Find subscriptions with scheduled downgrades that are due
+  const subscriptionsToDowngrade = await db
+    .collection("subscriptions")
+    .find({
+      "scheduledDowngrade.scheduledFor": { $lte: now },
+    })
+    .toArray()
+
+  for (const subscription of subscriptionsToDowngrade) {
+    try {
+      const targetPlan = subscription.scheduledDowngrade.targetPlan
+
+      // Update subscription to new plan
+      await db.collection("subscriptions").updateOne(
+        { _id: subscription._id },
+        {
+          $set: {
+            plan: targetPlan,
+            amount: 0, // Will be updated on next payment
+            updatedAt: now,
+          },
+          $unset: {
+            scheduledDowngrade: "",
+          },
+        }
+      )
+
+      // Update organization tier
+      await db.collection("organizations").updateOne(
+        { _id: new ObjectId(subscription.organizationId) },
+        {
+          $set: {
+            subscriptionTier: targetPlan,
+            updatedAt: now,
+          },
+        }
+      )
+
+      console.log(`Downgraded subscription ${subscription._id} to ${targetPlan}`)
+    } catch (error) {
+      console.error(`Error processing downgrade for subscription ${subscription._id}:`, error)
+    }
+  }
+}
+
+/**
+ * Cancel scheduled downgrade
+ */
+export async function cancelScheduledDowngrade(organizationId: string): Promise<void> {
+  const db = await getDatabase()
+  const now = new Date()
+
+  await db.collection("subscriptions").updateOne(
+    { organizationId },
+    {
+      $unset: {
+        scheduledDowngrade: "",
+      },
+      $set: {
+        updatedAt: now,
+      },
+    }
+  )
+}
+
+/**
+ * Downgrade subscription immediately (for starter plan)
+ */
+export async function downgradeSubscription(
+  organizationId: string,
+  targetPlan: "starter" | "professional"
+): Promise<void> {
   const db = await getDatabase()
   const now = new Date()
 
@@ -171,9 +257,26 @@ export async function downgradeToStarter(organizationId: string): Promise<void> 
     { organizationId },
     {
       $set: {
-        plan: "starter",
+        plan: targetPlan,
+        amount: 0,
         status: "active",
-        trialEndDate: null,
+        paystackSubscriptionCode: null,
+        paystackCustomerCode: null,
+        nextPaymentDate: null,
+        updatedAt: now,
+      },
+      $unset: {
+        scheduledDowngrade: "",
+      },
+    }
+  )
+
+  // Update organization tier
+  await db.collection("organizations").updateOne(
+    { _id: new ObjectId(organizationId) },
+    {
+      $set: {
+        subscriptionTier: targetPlan,
         updatedAt: now,
       },
     }
@@ -187,6 +290,7 @@ export async function getSubscriptionStatus(organizationId: string): Promise<{
   plan: string
   status: string
   isActive: boolean
+  isTrialActive: boolean
   needsUpgrade: boolean
   trialDaysRemaining: number | null
   features: any
@@ -195,9 +299,10 @@ export async function getSubscriptionStatus(organizationId: string): Promise<{
 
   if (!subscription) {
     return {
-      plan: "none",
+      plan: "starter",
       status: "inactive",
       isActive: false,
+      isTrialActive: false,
       needsUpgrade: true,
       trialDaysRemaining: null,
       features: {},
@@ -207,17 +312,18 @@ export async function getSubscriptionStatus(organizationId: string): Promise<{
   const isActive = subscription.status === "active"
   let trialDaysRemaining: number | null = null
 
-  if (subscription.plan === "free_trial" && subscription.trialEndDate) {
+  if (subscription.plan === "starter" && subscription.trialEndDate && subscription.isTrialActive) {
     const diff = subscription.trialEndDate.getTime() - getUTCDate().getTime()
     trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const needsUpgrade = subscription.plan === "free_trial" && subscription.trialEndDate ? (new Date() > subscription.trialEndDate) : false
+  const needsUpgrade = subscription.plan === "starter" && !subscription.isTrialActive
 
   return {
     plan: subscription.plan,
     status: subscription.status,
     isActive,
+    isTrialActive: subscription.isTrialActive ?? false,
     needsUpgrade,
     trialDaysRemaining,
     features: subscription,

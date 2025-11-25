@@ -7,6 +7,7 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { AttendanceLog, TenantError } from "@/lib/types"
+import { hasFeatureAccess } from "@/lib/features/feature-access"
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,20 @@ export async function GET(request: NextRequest) {
     const context = await withAuth(request, {
       allowedRoles: ["org_admin", "manager"],
     })
+
+    // Check if user has access to history
+    const canAccessHistory = await hasFeatureAccess(
+      context.tenantId,
+      "canAccessHistory",
+      process.env.NODE_ENV === "development"
+    )
+
+    if (!canAccessHistory) {
+      return NextResponse.json(
+        { error: "This feature requires a paid subscription plan" },
+        { status: 403 }
+      )
+    }
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")

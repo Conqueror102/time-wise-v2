@@ -9,7 +9,7 @@ import { Plus, Search, Edit, Trash2, QrCode, Crown, AlertCircle, Fingerprint } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { canAddStaff, PLAN_FEATURES, type PlanType } from "@/lib/features/feature-manager"
+import { canAddStaff, PLAN_FEATURES, type PlanType, getFeatureGateMessage, getRecommendedPlan } from "@/lib/features/feature-manager"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import {
@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { QRDownloadButton } from "@/components/qr-download-button"
+import { useSubscription } from "@/hooks/use-subscription"
+import { UpgradePopup } from "@/components/subscription/upgrade-popup"
 
 interface Staff {
   _id: string
@@ -37,6 +39,7 @@ interface Staff {
 
 export default function StaffPage() {
   const { toast } = useToast()
+  const { hasFeature, canAddStaff: canAddStaffHook, subscription } = useSubscription()
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -45,6 +48,8 @@ export default function StaffPage() {
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showQRDialog, setShowQRDialog] = useState(false)
   const [showFingerprintDialog, setShowFingerprintDialog] = useState(false)
+  const [showUpgradePopup, setShowUpgradePopup] = useState(false)
+  const [upgradeFeature, setUpgradeFeature] = useState<"canAddStaff" | "canEditStaff">("canAddStaff")
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [organization, setOrganization] = useState<any>(null)
   const isDevelopment = process.env.NODE_ENV === "development"
@@ -87,6 +92,21 @@ export default function StaffPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Check feature access
+    if (!hasFeature("canAddStaff")) {
+      setUpgradeFeature("canAddStaff")
+      setShowUpgradePopup(true)
+      return
+    }
+
+    // Check staff limit
+    if (!canAddStaffHook(staff.length)) {
+      setUpgradeFeature("canAddStaff")
+      setShowUpgradePopup(true)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -130,6 +150,13 @@ export default function StaffPage() {
   }
 
   const handleEdit = (staff: Staff) => {
+    // Check feature access
+    if (!hasFeature("canEditStaff")) {
+      setUpgradeFeature("canEditStaff")
+      setShowUpgradePopup(true)
+      return
+    }
+
     setSelectedStaff(staff)
     setFormData({
       name: staff.name,
@@ -143,6 +170,13 @@ export default function StaffPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedStaff) return
+
+    // Check feature access
+    if (!hasFeature("canEditStaff")) {
+      setUpgradeFeature("canEditStaff")
+      setShowUpgradePopup(true)
+      return
+    }
 
     setLoading(true)
     try {
@@ -202,9 +236,7 @@ export default function StaffPage() {
       s.department.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const canAdd = organization
-    ? canAddStaff(organization.subscriptionTier as PlanType, staff.length, isDevelopment)
-    : false
+  const canAdd = hasFeature("canAddStaff") && canAddStaffHook(staff.length)
 
   const planType = (organization?.subscriptionTier as PlanType) || "starter"
   const maxStaff = organization && PLAN_FEATURES[planType]
@@ -214,6 +246,17 @@ export default function StaffPage() {
   return (
     <>
       <Toaster />
+      
+      {/* Upgrade Popup */}
+      <UpgradePopup
+        isOpen={showUpgradePopup}
+        onClose={() => setShowUpgradePopup(false)}
+        feature={upgradeFeature === "canAddStaff" ? "Add Staff" : "Edit Staff"}
+        message={getFeatureGateMessage(upgradeFeature, subscription?.plan || "starter")}
+        currentPlan={subscription?.plan || "starter"}
+        recommendedPlan={getRecommendedPlan(upgradeFeature)}
+      />
+      
       <div className="space-y-6">
         {/* Header */}
       <div className="flex items-center justify-between">
@@ -228,13 +271,14 @@ export default function StaffPage() {
             )}
           </p>
         </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button disabled={!canAdd}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Staff
-            </Button>
-          </DialogTrigger>
+        {canAdd ? (
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Staff
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Register New Staff</DialogTitle>
@@ -283,6 +327,17 @@ export default function StaffPage() {
             </form>
           </DialogContent>
         </Dialog>
+        ) : (
+          <Button 
+            onClick={() => {
+              setUpgradeFeature("canAddStaff")
+              setShowUpgradePopup(true)
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Staff
+          </Button>
+        )}
       </div>
 
       {/* Staff Limit Warning */}
@@ -383,10 +438,10 @@ export default function StaffPage() {
                         setSelectedStaff(s)
                         setShowFingerprintDialog(true)
                       }}
-                      title="Register Fingerprint"
+                      title="Register Biometric"
                     >
                       <Fingerprint className="w-4 h-4 mr-1" />
-                      Fingerprint
+                      Biometric
                     </Button>
                     <QRDownloadButton
                       qrCodeUrl={s.qrCode}
@@ -512,10 +567,10 @@ export default function StaffPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Fingerprint className="w-5 h-5" />
-              Register Fingerprint for {selectedStaff?.name}
+              Register Biometric for {selectedStaff?.name}
             </DialogTitle>
             <DialogDescription>
-              Staff ID: {selectedStaff?.staffId}
+              Staff ID: {selectedStaff?.staffId} • Supports fingerprint, Face ID, Windows Hello, and more
             </DialogDescription>
           </DialogHeader>
           
@@ -526,7 +581,7 @@ export default function StaffPage() {
                 Important: Device-Specific Registration
               </h4>
               <p className="text-sm text-blue-800">
-                Fingerprints must be registered on the <strong>same device</strong> that will be used for check-in/out (e.g., the kiosk tablet at the entrance).
+                Biometric authentication must be registered on the <strong>same device</strong> that will be used for check-in/out (e.g., the kiosk tablet at the entrance).
               </p>
               <p className="text-sm text-blue-800 mt-2">
                 To register:
@@ -535,16 +590,16 @@ export default function StaffPage() {
                 <li>Go to the check-in device</li>
                 <li>Visit: <code className="bg-blue-100 px-1 rounded">/register-biometric</code></li>
                 <li>Enter Staff ID: <strong>{selectedStaff?.staffId}</strong></li>
-                <li>Follow the fingerprint registration process</li>
+                <li>Follow the biometric registration process (fingerprint, Face ID, Windows Hello, etc.)</li>
                 <li>
                   <strong>If you're on the check-in device now:</strong>{" "}
                   <a
-                    href={`/register-biometric?staffId=${selectedStaff?.staffId}`}
+                    href={`/register-biometric?staffId=${selectedStaff?.staffId}&tenantId=${organization._id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 underline"
                   >
-                    Register fingerprint directly
+                    Register biometric directly
                   </a>
                 </li>
               </ol>
@@ -552,7 +607,7 @@ export default function StaffPage() {
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <p className="text-sm text-yellow-800">
-                <strong>Note:</strong> Fingerprints registered on this admin device will NOT work on the check-in kiosk.
+                <strong>Note:</strong> Biometric authentication registered on this admin device will NOT work on the check-in kiosk.
               </p>
             </div>
 
@@ -574,7 +629,7 @@ export default function StaffPage() {
               <Button
                 onClick={() => {
                   // Copy registration URL
-                  const url = `${window.location.origin}/register-biometric?staffId=${selectedStaff?.staffId}`
+                  const url = `${window.location.origin}/register-biometric?staffId=${selectedStaff?.staffId}&tenantId=${organization._id}`
                   navigator.clipboard.writeText(url)
                   toast({
                     title: "Copied!",

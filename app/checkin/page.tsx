@@ -5,7 +5,7 @@
  * Can be used on kiosk or staff mobile devices
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import React from "react"
 import { getUTCDate } from "@/lib/utils/date"
 import { User, QrCode, ScanFace, Lock } from "lucide-react"
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FaceRecognition } from "@/components/face-recognition"
 import { UnlockScreen } from "@/components/checkin/unlock-screen"
-import { FingerprintVerificationModal } from "@/components/checkin/fingerprint-verification-modal"
+import { BiometricVerificationModal } from "@/components/checkin/fingerprint-verification-modal"
 import { CheckinHeader } from "@/components/checkin/checkin-header"
 import { SuccessMessage } from "@/components/checkin/success-message"
 import { ManualEntryTab } from "@/components/checkin/manual-entry-tab"
@@ -21,6 +21,8 @@ import { QRScannerTab } from "@/components/checkin/qr-scanner-tab"
 import { useCheckin } from "@/hooks/use-checkin"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import { UpgradePopup } from "@/components/subscription/upgrade-popup"
+import { getFeatureGateMessage, getRecommendedPlan } from "@/lib/features/feature-manager"
 
 export default function CheckInPage() {
   // Core state
@@ -38,6 +40,10 @@ export default function CheckInPage() {
   const [scannerClosing, setScannerClosing] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
+  const [showUpgradePopup, setShowUpgradePopup] = useState(false)
+  const [upgradeFeature, setUpgradeFeature] = useState<"photoVerification" | "fingerprintCheckIn">("photoVerification")
+  const [subscriptionPlan, setSubscriptionPlan] = useState<"starter" | "professional" | "enterprise">("starter")
+  const [subscriptionTrialActive, setSubscriptionTrialActive] = useState(false)
   const [showFingerprintModal, setShowFingerprintModal] = useState(false)
   const [pendingCheckInType, setPendingCheckInType] = useState<"check-in" | "check-out" | null>(null)
   const [enabledCheckInMethods, setEnabledCheckInMethods] = useState({
@@ -78,8 +84,28 @@ export default function CheckInPage() {
   }) => {
     setTenantId(data.tenantId)
     setOrganizationName(data.organizationName)
-    setCapturePhotos(data.capturePhotos)
-    setFingerprintEnabled(data.fingerprintEnabled || false)
+    
+    // Fetch subscription status to check feature access
+    fetch("/api/subscription/status")
+      .then(res => res.json())
+      .then(subData => {
+        setSubscriptionPlan(subData.plan || "starter")
+        setSubscriptionTrialActive(subData.isTrialActive || false)
+        
+        // Only enable features if subscription allows
+        const isDev = process.env.NODE_ENV === "development"
+        const canUsePhoto = isDev || subData.plan === "professional" || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
+        const canUseFingerprint = isDev || subData.plan === "enterprise"
+        
+        setCapturePhotos(data.capturePhotos && canUsePhoto)
+        setFingerprintEnabled(data.fingerprintEnabled && canUseFingerprint)
+      })
+      .catch(() => {
+        // Fallback if subscription check fails
+        setCapturePhotos(data.capturePhotos)
+        setFingerprintEnabled(data.fingerprintEnabled || false)
+      })
+    
     setIsInTrial(data.isInTrial || false)
     setEnabledCheckInMethods(data.enabledCheckInMethods || {
       qrCode: true,
@@ -259,6 +285,24 @@ export default function CheckInPage() {
   const handleCheckIn = async (type: "check-in" | "check-out") => {
     console.log("=== CHECK-IN DEBUG ===")
     console.log("fingerprintEnabled:", fingerprintEnabled)
+    
+    // Check if fingerprint is locked by subscription
+    const isDev = process.env.NODE_ENV === "development"
+    if (fingerprintEnabled && !isDev && subscriptionPlan !== "enterprise") {
+      setUpgradeFeature("fingerprintCheckIn")
+      setShowUpgradePopup(true)
+      return
+    }
+    
+    // Check if photo verification is locked by subscription
+    if (capturePhotos && !isDev) {
+      const canUsePhoto = subscriptionPlan === "professional" || subscriptionPlan === "enterprise" || (subscriptionPlan === "starter" && subscriptionTrialActive)
+      if (!canUsePhoto) {
+        setUpgradeFeature("photoVerification")
+        setShowUpgradePopup(true)
+        return
+      }
+    }
     
     // Only require fingerprint if explicitly enabled in settings
     if (fingerprintEnabled) {
@@ -514,7 +558,18 @@ export default function CheckInPage() {
   return (
     <>
       <Toaster />
-      <FingerprintVerificationModal
+      
+      {/* Upgrade Popup */}
+      <UpgradePopup
+        isOpen={showUpgradePopup}
+        onClose={() => setShowUpgradePopup(false)}
+        feature={upgradeFeature === "fingerprintCheckIn" ? "Fingerprint Verification" : "Photo Verification"}
+        message={getFeatureGateMessage(upgradeFeature, subscriptionPlan)}
+        currentPlan={subscriptionPlan}
+        recommendedPlan={getRecommendedPlan(upgradeFeature)}
+      />
+      
+      <BiometricVerificationModal
         open={showFingerprintModal}
         onClose={() => setShowFingerprintModal(false)}
         staffId={staffId}

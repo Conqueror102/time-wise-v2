@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Users, AlertCircle } from "lucide-react"
 import { getLocalTimeString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageGate } from "@/components/subscription/page-gate"
 
 interface StaffPresent {
   staffId: string
@@ -47,14 +48,17 @@ export default function PresentPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <PageGate feature="canAccessHistory">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </PageGate>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate feature="canAccessHistory">
+      <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Currently Present</h1>
         <p className="text-gray-600 mt-1">Staff members currently in the workplace</p>
@@ -100,5 +104,6 @@ export default function PresentPage() {
         </CardContent>
       </Card>
     </div>
+    </PageGate>
   )
 }

@@ -9,6 +9,7 @@ import {
 import { AuditService } from "./audit"
 import { ObjectId } from "mongodb"
 import { SuperAdminError, SuperAdminErrorCodes } from "@/lib/errors/super-admin-errors"
+import { escapeRegex } from "@/lib/utils/regex"
 
 /**
  * Organization analytics data
@@ -44,10 +45,11 @@ export class OrganizationService {
     const query: any = {}
 
     if (filters.search) {
+      const safeSearch = escapeRegex(filters.search)
       query.$or = [
-        { name: { $regex: filters.search, $options: "i" } },
-        { subdomain: { $regex: filters.search, $options: "i" } },
-        { adminEmail: { $regex: filters.search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { subdomain: { $regex: safeSearch, $options: "i" } },
+        { adminEmail: { $regex: safeSearch, $options: "i" } },
       ]
     }
 

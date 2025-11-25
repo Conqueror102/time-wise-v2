@@ -116,28 +116,35 @@ export async function POST(request: NextRequest) {
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Check staff limit (unless in development mode)
+    // Check staff limit and feature access (unless in development mode)
     const isDevelopment = process.env.NODE_ENV === "development"
     if (!isDevelopment) {
-      // Get organization to check subscription tier
-      const organization = await db.collection("organizations").findOne({ _id: new ObjectId(context.tenantId) })
-      if (!organization) {
+      // Get subscription status
+      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
+      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
+      
+      const subscription = await getSubscriptionStatus(context.tenantId)
+      
+      // Check if can add staff (feature access)
+      if (!hasFeatureAccess(subscription.plan as any, "canAddStaff", subscription.isTrialActive, isDevelopment)) {
         return NextResponse.json(
-          { error: "Organization not found" },
-          { status: 404 }
+          { 
+            error: "Your trial has expired. Upgrade to Professional or Enterprise to add staff members.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
         )
       }
 
       // Count current staff
       const currentStaffCount = await tenantDb.count("staff", {})
       
-      // Check if can add more staff
-      const subscriptionTier = (organization?.subscriptionTier || "free") as "free" | "free_trial" | "starter" | "professional" | "enterprise"
-      if (!canAddStaff(subscriptionTier, currentStaffCount, isDevelopment)) {
-        const maxStaff = PLAN_FEATURES[subscriptionTier]?.maxStaff || 10
+      // Check staff limit
+      if (!canAddStaff(subscription.plan as any, currentStaffCount, subscription.isTrialActive, isDevelopment)) {
+        const maxStaff = PLAN_FEATURES[subscription.plan as any]?.maxStaff || 10
         return NextResponse.json(
           { 
-            error: `Staff limit reached. Your ${subscriptionTier} plan allows up to ${maxStaff} staff members. Please upgrade to add more.`,
+            error: `Staff limit reached. Your ${subscription.plan} plan allows up to ${maxStaff} staff members. Please upgrade to add more.`,
             code: "STAFF_LIMIT_REACHED"
           },
           { status: 403 }

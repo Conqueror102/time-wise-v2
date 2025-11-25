@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { Users, UserCheck, UserX, Clock, Calendar, TrendingUp } from "lucide-react"
 import { getLocalTimeString, getLocalDateString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SubscriptionStatusCard } from "@/components/subscription-status-card"
+import { TrialExpirationBanner } from "@/components/subscription/trial-expiration-banner"
 import Link from "next/link"
 
 interface DashboardStats {
@@ -78,6 +80,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Trial Expiration Banner */}
+      <TrialExpirationBanner />
+
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
