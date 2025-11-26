@@ -14,6 +14,26 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
+    // Check feature access - Department analytics are Enterprise only (unless in development mode)
+    const isDevelopment = process.env.NODE_ENV === "development"
+    if (!isDevelopment) {
+      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
+      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
+      
+      const subscription = await getSubscriptionStatus(context.tenantId)
+      
+      // Check if can access department analytics (Enterprise only)
+      if (!hasFeatureAccess(subscription.plan as any, "analyticsDepartment", subscription.isTrialActive, isDevelopment)) {
+        return NextResponse.json(
+          { 
+            error: "Department analytics are only available in the Enterprise plan. Upgrade to access team insights.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     const searchParams = request.nextUrl.searchParams
     const range = searchParams.get("range") || "30d"
 

@@ -27,22 +27,32 @@ function RegisterBiometricContent() {
   const [registeredFingerprint, setRegisteredFingerprint] = useState(false)
   const [registeredFace, setRegisteredFace] = useState(false)
 
-  // Extract staffId from URL parameter and auto-verify
+  // Extract staffId and tenantId from URL parameter and auto-verify
   useEffect(() => {
     const urlStaffId = searchParams.get("staffId")
-    if (urlStaffId) {
-      setStaffId(urlStaffId.toUpperCase())
+    const urlTenantId = searchParams.get("tenantId")
+    console.log("URL staffId:", urlStaffId, "tenantId:", urlTenantId)
+    if (urlStaffId && urlTenantId) {
+      const upperStaffId = urlStaffId.toUpperCase()
+      console.log("Setting staffId:", upperStaffId)
+      setStaffId(upperStaffId)
       // Auto-verify the staff ID
-      verifyStaffById(urlStaffId.toUpperCase())
+      verifyStaffById(upperStaffId, urlTenantId)
+    } else if (urlStaffId && !urlTenantId) {
+      setError("Invalid registration link. Please use the link provided by your administrator.")
     }
-  }, [searchParams])
+  }, []) // Run only once on mount
 
-  const verifyStaffById = async (id: string) => {
+  const verifyStaffById = async (id: string, tenantId?: string) => {
     setVerifying(true)
     setError("")
 
     try {
-      const response = await fetch(`/api/staff/verify?staffId=${id}`)
+      const url = tenantId 
+        ? `/api/staff/verify?staffId=${id}&tenantId=${tenantId}`
+        : `/api/staff/verify?staffId=${id}`
+      
+      const response = await fetch(url)
       const data = await response.json()
 
       if (!response.ok) {
@@ -331,11 +341,17 @@ function RegisterBiometricContent() {
   )
 }
 
+// Wrapper component with Suspense boundary
 export default function RegisterBiometricPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-0 shadow-xl">
+          <CardContent className="p-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-center text-gray-600 mt-4">Loading registration...</p>
+          </CardContent>
+        </Card>
       </div>
     }>
       <RegisterBiometricContent />

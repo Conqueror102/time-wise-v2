@@ -13,6 +13,26 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
+    // Check feature access - Lateness analytics are Professional+ (unless in development mode)
+    const isDevelopment = process.env.NODE_ENV === "development"
+    if (!isDevelopment) {
+      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
+      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
+      
+      const subscription = await getSubscriptionStatus(context.tenantId)
+      
+      // Check if can access lateness analytics (Professional+)
+      if (!hasFeatureAccess(subscription.plan as any, "analyticsLateness", subscription.isTrialActive, isDevelopment)) {
+        return NextResponse.json(
+          { 
+            error: "Lateness analytics are only available in Professional and Enterprise plans. Upgrade to access this feature.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     const searchParams = request.nextUrl.searchParams
     const range = searchParams.get("range") || "30d"
 

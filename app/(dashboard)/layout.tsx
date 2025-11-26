@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuthGuard } from "@/hooks/use-auth-guard"
+import { useSubscription } from "@/hooks/use-subscription"
 import Link from "next/link"
 import {
   Building2,
@@ -23,9 +24,15 @@ import {
   UserCheck,
   UserX,
   History,
+  CreditCard,
+  Lock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AuthenticatingScreen } from "@/components/auth/authenticating-screen"
+import { SubscriptionIndicator } from "@/components/subscription-indicator"
+import { UpgradeModal } from "@/components/subscription/upgrade-modal"
+import { TrialExpirationBanner } from "@/components/subscription/trial-expiration-banner"
+import { getFeatureGateMessage } from "@/lib/features/feature-manager"
 
 export default function DashboardLayout({
   children,
@@ -35,9 +42,12 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
   const { isLoading, user, organization } = useAuthGuard()
+  const { hasFeature, subscription } = useSubscription()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [reportsOpen, setReportsOpen] = useState(true)
+  const [reportsOpen, setReportsOpen] = useState(false) // Closed by default
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [lockedFeature, setLockedFeature] = useState<"canAccessAnalytics" | "canAccessHistory">("canAccessHistory")
 
   // Authentication is now handled by useAuthGuard
 
@@ -60,10 +70,10 @@ export default function DashboardLayout({
   }
 
   const mainNavItems = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-    { href: "/dashboard/attendance", label: "Attendance", icon: Clock },
-    { href: "/dashboard/staff", label: "Staff", icon: Users },
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, requiresFeature: null },
+    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, requiresFeature: "canAccessAnalytics" as const },
+    { href: "/dashboard/attendance", label: "Attendance", icon: Clock, requiresFeature: null },
+    { href: "/dashboard/staff", label: "Staff", icon: Users, requiresFeature: null },
   ]
 
   const reportsItems = [
@@ -75,6 +85,7 @@ export default function DashboardLayout({
   ]
 
   const bottomNavItems = [
+    { href: "/dashboard/subscription", label: "Subscription", icon: CreditCard },
     { href: "/dashboard/settings", label: "Settings", icon: Settings },
   ]
 
@@ -129,6 +140,26 @@ export default function DashboardLayout({
             {mainNavItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
+              const hasAccess = item.requiresFeature ? hasFeature(item.requiresFeature) : true
+              
+              if (!hasAccess) {
+                // Show grayed out with lock icon
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => {
+                      setLockedFeature(item.requiresFeature!)
+                      setShowUpgradeModal(true)
+                    }}
+                    className="flex items-center gap-3 px-4 py-2 rounded-lg transition-colors text-gray-400 cursor-not-allowed w-full text-left"
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{item.label}</span>
+                    <Lock className="w-3 h-3 ml-auto" />
+                  </button>
+                )
+              }
+              
               return (
                 <Link
                   key={item.href}
@@ -149,22 +180,40 @@ export default function DashboardLayout({
             {/* Reports Section */}
             <div className="pt-2">
               <button
-                onClick={() => setReportsOpen(!reportsOpen)}
-                className="flex items-center justify-between w-full px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  // Check if user has access to reports
+                  const canAccessReports = hasFeature("canAccessHistory")
+                  if (!canAccessReports) {
+                    setLockedFeature("canAccessHistory")
+                    setShowUpgradeModal(true)
+                  } else {
+                    setReportsOpen(!reportsOpen)
+                  }
+                }}
+                className={`flex items-center justify-between w-full px-4 py-2 rounded-lg transition-colors ${
+                  hasFeature("canAccessHistory")
+                    ? "text-gray-700 hover:bg-gray-100"
+                    : "text-gray-400 cursor-not-allowed"
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <BarChart3 className="w-5 h-5" />
                   <span className="font-medium">Reports</span>
+                  {!hasFeature("canAccessHistory") && (
+                    <Lock className="w-3 h-3 text-gray-400" />
+                  )}
                 </div>
-                {reportsOpen ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
+                {hasFeature("canAccessHistory") && (
+                  reportsOpen ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" />
+                  )
                 )}
               </button>
 
               {/* Collapsible Reports Items */}
-              {reportsOpen && (
+              {reportsOpen && hasFeature("canAccessHistory") && (
                 <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-4">
                   {reportsItems.map((item) => {
                     const Icon = item.icon
@@ -215,6 +264,9 @@ export default function DashboardLayout({
 
           {/* User Info & Logout */}
           <div className="p-4 border-t">
+            {/* Subscription Indicator */}
+            <SubscriptionIndicator />
+            
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
                 {user.firstName?.[0]}{user.lastName?.[0]}
@@ -240,6 +292,9 @@ export default function DashboardLayout({
 
       {/* Main Content */}
       <div className="lg:pl-64">
+        {/* Trial Expiration Banner - Shows on all pages */}
+        <TrialExpirationBanner />
+
         {/* Mobile Header */}
         <header className="lg:hidden bg-white border-b p-4">
           <div className="flex items-center justify-between">
@@ -295,6 +350,30 @@ export default function DashboardLayout({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Upgrade Modal for Locked Features */}
+      {showUpgradeModal && (
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          onUpgrade={async (plan) => {
+            const token = localStorage.getItem("accessToken")
+            const response = await fetch("/api/subscription/upgrade", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ targetPlan: plan }),
+            })
+            const data = await response.json()
+            if (data.authorizationUrl) {
+              window.location.href = data.authorizationUrl
+            }
+          }}
+          currentPlan={subscription?.plan || "starter"}
+        />
       )}
     </div>
   )

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { UserX, UserCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageGate } from "@/components/subscription/page-gate"
 
 interface AbsentStaff {
   staffId: string
@@ -40,14 +41,17 @@ export default function AbsentPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <PageGate feature="canAccessHistory">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </PageGate>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate feature="canAccessHistory">
+      <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Absent Staff</h1>
         <p className="text-gray-600 mt-1">Staff members who haven't checked in today</p>
@@ -96,5 +100,6 @@ export default function AbsentPage() {
         </CardContent>
       </Card>
     </div>
+    </PageGate>
   )
 }

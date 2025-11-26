@@ -38,7 +38,7 @@ export interface Organization {
   subdomain: string
   adminEmail: string
   status: OrganizationStatus
-  subscriptionTier: "free" | "free_trial" | "starter" | "professional" | "enterprise"
+  subscriptionTier: "starter" | "professional" | "enterprise"
   subscriptionStatus: "active" | "trial" | "cancelled"
   createdAt: Date
   updatedAt?: Date

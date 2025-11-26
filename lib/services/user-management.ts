@@ -8,6 +8,7 @@ import {
 } from "@/lib/types/super-admin"
 import { AuditService } from "./audit"
 import { ObjectId } from "mongodb"
+import { escapeRegex } from "@/lib/utils/regex"
 import { SuperAdminError, SuperAdminErrorCodes } from "@/lib/errors/super-admin-errors"
 import { hashPassword } from "@/lib/auth/password"
 import { sendEmail } from "./email"
@@ -33,10 +34,11 @@ export class UserManagementService {
     const query: any = {}
 
     if (filters.search) {
+      const safeSearch = escapeRegex(filters.search)
       query.$or = [
-        { email: { $regex: filters.search, $options: "i" } },
-        { firstName: { $regex: filters.search, $options: "i" } },
-        { lastName: { $regex: filters.search, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
       ]
     }
 

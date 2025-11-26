@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         // Find user by email
         const user = await db.collection("users").findOne({ email })
 
-        // Don't reveal if user exists (security best practice)
+       
         if (!user) {
             return NextResponse.json({
                 success: true,

@@ -8,10 +8,14 @@ import { comparePassword, generateAccessToken } from "@/lib/auth"
 import { LoginRequest, User, Organization, TenantError, ErrorCodes } from "@/lib/types"
 import { ObjectId } from "mongodb"
 import { withErrorHandler } from "@/lib/middleware/error-handler"
+import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
 
 export const dynamic = 'force-dynamic'
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
+  // Apply rate limiting
+  const rateLimitResponse = applyRateLimit(request, RateLimitPresets.AUTH_LOGIN)
+  if (rateLimitResponse) return rateLimitResponse
   try {
     const body: LoginRequest = await request.json()
     const { email, password } = body

@@ -9,10 +9,14 @@ import { hashPassword, validatePasswordStrength } from "@/lib/auth"
 import { validateSubdomain, validateEmail, sanitizeOrganizationName } from "@/lib/database/validation"
 import { RegisterOrganizationRequest, Organization, User, TenantError, ErrorCodes } from "@/lib/types"
 import { ObjectId } from "mongodb"
+import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting
+  const rateLimitResponse = applyRateLimit(request, RateLimitPresets.AUTH_REGISTER)
+  if (rateLimitResponse) return rateLimitResponse
   try {
     const body: RegisterOrganizationRequest = await request.json()
     const { name, subdomain, adminEmail, adminPassword, firstName, lastName } = body
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
       subdomain: subdomain.toLowerCase(),
       adminEmail,
       status: "trial",
-      subscriptionTier: "free",
+      subscriptionTier: "starter",
       subscriptionStatus: "trial",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -101,6 +105,10 @@ export async function POST(request: NextRequest) {
 
     const orgResult = await db.collection("organizations").insertOne(organization)
     const organizationId = orgResult.insertedId.toString()
+
+    // Create subscription record
+    const { createTrialSubscription } = await import("@/lib/subscription/subscription-manager")
+    await createTrialSubscription(organizationId)
 
     // Create admin user
     const adminUser: Omit<User, "_id"> = {

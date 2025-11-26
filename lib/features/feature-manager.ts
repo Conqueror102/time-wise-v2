@@ -1,120 +1,122 @@
 /**
  * Feature Management System
  * Controls feature access based on subscription plan
+ * 
+ * Plan Structure:
+ * - Starter: Free 14-day trial with ALL features unlocked (full app experience) → after trial: basic check-in only
+ * - Professional: ₦5,000, max 50 staff, photo verification, some analytics
+ * - Enterprise: ₦10,000, unlimited staff, all features (fingerprint, photo, full analytics)
  */
 
 import { getUTCDate, addDaysUTC } from "@/lib/utils/date"
 
-export type PlanType = "free_trial" | "starter" | "professional" | "enterprise" | "free"
+export type PlanType = "starter" | "professional" | "enterprise"
 
 export interface PlanFeatures {
+  // Staff limits
   maxStaff: number
+  canAddStaff: boolean
+  canEditStaff: boolean
+  
+  // Check-in methods
   qrCheckIn: boolean
   manualCheckIn: boolean
   fingerprintCheckIn: boolean
-  faceCheckIn: boolean
-  basicReports: boolean
-  advancedAnalytics: boolean
-  exportData: boolean
   photoVerification: boolean
-  apiAccess: boolean
-  customBranding: boolean
+  
+  // Analytics & Reports
+  canAccessAnalytics: boolean
+  canAccessHistory: boolean
+  canAccessReports: boolean
+  exportData: boolean
+  
+  // Analytics Tabs (granular control)
+  analyticsOverview: boolean // Overview stats
+  analyticsLateness: boolean // Lateness analysis
+  analyticsTrends: boolean // Attendance trends (Enterprise only)
+  analyticsDepartment: boolean // Department breakdown (Enterprise only)
+  analyticsPerformance: boolean // Staff performance (Enterprise only)
+  
+  // Support
   prioritySupport: boolean
-  dedicatedSupport: boolean
 }
 
 export const PLAN_FEATURES: Record<PlanType, PlanFeatures> = {
-  free_trial: {
-    maxStaff: 10,
-    qrCheckIn: true,
-    manualCheckIn: true,
-    fingerprintCheckIn: true,
-    faceCheckIn: true,
-    basicReports: true,
-    advancedAnalytics: false,
-    exportData: false,
-    photoVerification: true,
-    apiAccess: false,
-    customBranding: false,
-    prioritySupport: false,
-    dedicatedSupport: false,
-  },
-  free: {
-    // Legacy plan type - same as free_trial
-    maxStaff: 10,
-    qrCheckIn: true,
-    manualCheckIn: true,
-    fingerprintCheckIn: true,
-    faceCheckIn: true,
-    basicReports: true,
-    advancedAnalytics: false,
-    exportData: false,
-    photoVerification: true,
-    apiAccess: false,
-    customBranding: false,
-    prioritySupport: false,
-    dedicatedSupport: false,
-  },
   starter: {
     maxStaff: 10,
+    canAddStaff: false, // Locked after trial
+    canEditStaff: false, // Locked after trial
     qrCheckIn: true,
     manualCheckIn: true,
     fingerprintCheckIn: false,
-    faceCheckIn: false,
-    basicReports: true,
-    advancedAnalytics: false,
-    exportData: false,
     photoVerification: false,
-    apiAccess: false,
-    customBranding: false,
+    canAccessAnalytics: false, // Completely blocked
+    canAccessHistory: false, // Completely blocked
+    canAccessReports: false, // Completely blocked
+    exportData: false,
+    analyticsOverview: false,
+    analyticsLateness: false,
+    analyticsTrends: false,
+    analyticsDepartment: false,
+    analyticsPerformance: false,
     prioritySupport: false,
-    dedicatedSupport: false,
   },
   professional: {
     maxStaff: 50,
+    canAddStaff: true,
+    canEditStaff: true,
     qrCheckIn: true,
     manualCheckIn: true,
-    fingerprintCheckIn: true,
-    faceCheckIn: true,
-    basicReports: true,
-    advancedAnalytics: true,
-    exportData: true,
-    photoVerification: true,
-    apiAccess: false,
-    customBranding: false,
+    fingerprintCheckIn: false, // Locked - Enterprise only
+    photoVerification: true, // Unlocked
+    canAccessAnalytics: true, // Can access analytics page
+    canAccessHistory: true, // Can access history page
+    canAccessReports: true, // Can access reports page
+    exportData: true, // CSV export available
+    // Analytics tabs - only Overview and Lateness
+    analyticsOverview: true,
+    analyticsLateness: true,
+    analyticsTrends: false, // Locked - Enterprise only
+    analyticsDepartment: false, // Locked - Enterprise only
+    analyticsPerformance: false, // Locked - Enterprise only
     prioritySupport: true,
-    dedicatedSupport: false,
   },
   enterprise: {
     maxStaff: -1, // Unlimited
+    canAddStaff: true,
+    canEditStaff: true,
     qrCheckIn: true,
     manualCheckIn: true,
-    fingerprintCheckIn: true,
-    faceCheckIn: true,
-    basicReports: true,
-    advancedAnalytics: true,
-    exportData: true,
+    fingerprintCheckIn: true, // All biometrics unlocked
     photoVerification: true,
-    apiAccess: true,
-    customBranding: true,
+    canAccessAnalytics: true,
+    canAccessHistory: true,
+    canAccessReports: true,
+    exportData: true,
+    // Analytics tabs - all unlocked
+    analyticsOverview: true,
+    analyticsLateness: true,
+    analyticsTrends: true,
+    analyticsDepartment: true,
+    analyticsPerformance: true,
     prioritySupport: true,
-    dedicatedSupport: true,
   },
 }
 
+// Plan pricing
 export const PLAN_PRICES = {
   starter: {
-    monthly: 0,
+    monthly: 0, // Free 14-day trial
     currency: "NGN",
     paystackPlanCode: null,
   },
   professional: {
-    monthly: 29000, // 29,000 NGN (~$29)
+    monthly: 5000, // ₦5,000
     currency: "NGN",
     paystackPlanCode: "PLN_professional_monthly",
   },
   enterprise: {
-    monthly: 99000, // 99,000 NGN (~$99)
+    monthly: 10000, // ₦10,000
     currency: "NGN",
     paystackPlanCode: "PLN_enterprise_monthly",
   },
@@ -122,10 +124,15 @@ export const PLAN_PRICES = {
 
 /**
  * Check if organization has access to a feature
+ * @param plan - Current subscription plan
+ * @param feature - Feature to check access for
+ * @param isTrialActive - Whether the trial is still active (for starter plan)
+ * @param isDevelopment - Development mode bypasses all restrictions
  */
 export function hasFeatureAccess(
   plan: PlanType,
   feature: keyof PlanFeatures,
+  isTrialActive: boolean = false,
   isDevelopment: boolean = false
 ): boolean {
   // In development mode, all features are unlocked
@@ -139,6 +146,12 @@ export function hasFeatureAccess(
     plan = "starter"
   }
 
+  // Special handling for starter plan during trial
+  if (plan === "starter" && isTrialActive) {
+    // During trial, starter gets ALL features unlocked (full app experience)
+    return true // All features unlocked during trial, including fingerprint
+  }
+
   const planFeatures = PLAN_FEATURES[plan]
   return planFeatures?.[feature] as boolean ?? false
 }
@@ -149,6 +162,7 @@ export function hasFeatureAccess(
 export function canAddStaff(
   plan: PlanType,
   currentStaffCount: number,
+  isTrialActive: boolean = false,
   isDevelopment: boolean = false
 ): boolean {
   // In development mode, unlimited staff
@@ -160,6 +174,11 @@ export function canAddStaff(
   if (!plan || !PLAN_FEATURES[plan]) {
     console.warn(`Invalid plan type in canAddStaff: ${plan}, defaulting to starter`)
     plan = "starter"
+  }
+
+  // Starter plan after trial expires - can't add staff
+  if (plan === "starter" && !isTrialActive) {
+    return false
   }
 
   const maxStaff = PLAN_FEATURES[plan]?.maxStaff ?? 10
@@ -209,8 +228,8 @@ export function needsUpgrade(
     return false
   }
 
-  // If on free trial and expired
-  if (plan === "free_trial" && trialEndDate && isTrialExpired(trialEndDate)) {
+  // If on starter and trial expired
+  if (plan === "starter" && trialEndDate && isTrialExpired(trialEndDate)) {
     return true
   }
 
@@ -218,24 +237,47 @@ export function needsUpgrade(
 }
 
 /**
- * Get feature gate message
+ * Get feature gate message for upgrade prompts
  */
 export function getFeatureGateMessage(feature: keyof PlanFeatures, plan: PlanType): string {
-  const messages: Record<keyof PlanFeatures, string> = {
-    maxStaff: `Your ${plan} plan has reached the maximum staff limit. Upgrade to add more staff.`,
-    qrCheckIn: "QR code check-in is not available in your plan. Upgrade to unlock this feature.",
-    manualCheckIn: "Manual check-in is not available in your plan. Upgrade to unlock this feature.",
-    fingerprintCheckIn: "Fingerprint check-in is not available in your plan. Upgrade to Professional or Enterprise.",
-    faceCheckIn: "Face recognition check-in is not available in your plan. Upgrade to Professional or Enterprise.",
-    basicReports: "Basic reports are not available in your plan. Upgrade to unlock this feature.",
-    advancedAnalytics: "Advanced analytics are only available in Professional and Enterprise plans.",
+  const messages: Partial<Record<keyof PlanFeatures, string>> = {
+    canAddStaff: plan === "starter" 
+      ? "Your trial has expired. Upgrade to Professional or Enterprise to add and manage staff."
+      : `Your ${plan} plan has reached the maximum of ${PLAN_FEATURES[plan].maxStaff} staff. Upgrade to add more.`,
+    canEditStaff: "Your trial has expired. Upgrade to Professional or Enterprise to edit staff members.",
+    fingerprintCheckIn: "Fingerprint verification is only available in the Enterprise plan. Upgrade to unlock biometric authentication.",
+    photoVerification: plan === "starter"
+      ? "Photo verification is locked. Upgrade to Professional or Enterprise to unlock this feature."
+      : "Photo verification is only available in Professional and Enterprise plans.",
+    canAccessAnalytics: "Analytics are locked. Upgrade to Professional or Enterprise to access detailed insights.",
+    canAccessHistory: "Attendance history is locked. Upgrade to Professional or Enterprise to view records.",
+    canAccessReports: "Reports are locked. Upgrade to Professional or Enterprise to generate reports.",
     exportData: "Data export is only available in Professional and Enterprise plans.",
-    photoVerification: "Photo verification is only available in Professional and Enterprise plans.",
-    apiAccess: "API access is only available in the Enterprise plan.",
-    customBranding: "Custom branding is only available in the Enterprise plan.",
+    analyticsTrends: "Attendance trends analysis is only available in the Enterprise plan. Upgrade for advanced insights.",
+    analyticsDepartment: "Department analytics are only available in the Enterprise plan. Upgrade for team insights.",
+    analyticsPerformance: "Staff performance analytics are only available in the Enterprise plan. Upgrade for detailed reports.",
     prioritySupport: "Priority support is available in Professional and Enterprise plans.",
-    dedicatedSupport: "Dedicated support is only available in the Enterprise plan.",
   }
 
-  return messages[feature] || "This feature is not available in your current plan."
+  return messages[feature] || "This feature is not available in your current plan. Upgrade to unlock."
+}
+
+/**
+ * Get recommended plan for a locked feature
+ */
+export function getRecommendedPlan(feature: keyof PlanFeatures): PlanType {
+  // Features that require Enterprise
+  const enterpriseFeatures: (keyof PlanFeatures)[] = [
+    "fingerprintCheckIn",
+    "analyticsTrends",
+    "analyticsDepartment",
+    "analyticsPerformance",
+  ]
+  
+  if (enterpriseFeatures.includes(feature)) {
+    return "enterprise"
+  }
+  
+  // Most other features available in Professional
+  return "professional"
 }

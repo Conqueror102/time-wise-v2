@@ -11,7 +11,11 @@ const TOKEN_EXPIRATION = "24h" // 24 hours
 const REFRESH_TOKEN_EXPIRATION = "7d" // 7 days
 
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
-  console.warn("⚠️  WARNING: Using default JWT_SECRET in production. Please set JWT_SECRET environment variable!")
+  throw new Error("❌ CRITICAL: JWT_SECRET must be set in production environment!")
+}
+
+if (process.env.JWT_SECRET === "your-super-secret-jwt-key-change-in-production" && process.env.NODE_ENV === "production") {
+  throw new Error("❌ CRITICAL: JWT_SECRET is using default value. Change it in production!")
 }
 
 /**

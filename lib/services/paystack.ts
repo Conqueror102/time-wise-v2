@@ -1,10 +1,13 @@
 /**
  * Paystack Payment Service (Nigerian Payment Gateway)
- * Clean and modular implementation
+ * Clean and modular implementation with retry logic and timeout
  */
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!
 const PAYSTACK_BASE_URL = "https://api.paystack.co"
+const REQUEST_TIMEOUT = 30000 // 30 seconds
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000 // 1 second
 
 export interface PaystackInitializeResponse {
   success: boolean
@@ -28,6 +31,72 @@ export interface PaystackVerifyResponse {
 }
 
 /**
+ * Fetch with timeout
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number = REQUEST_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+    if (error.name === "AbortError") {
+      throw new Error("Request timeout")
+    }
+    throw error
+  }
+}
+
+/**
+ * Retry logic for API calls
+ */
+async function retryFetch(
+  url: string,
+  options: RequestInit,
+  retries: number = MAX_RETRIES
+): Promise<Response> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, options)
+      
+      // If response is successful or client error (4xx), don't retry
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response
+      }
+
+      // Server error (5xx), retry
+      lastError = new Error(`Server error: ${response.status}`)
+    } catch (error: any) {
+      lastError = error
+      
+      // Don't retry on timeout or abort
+      if (error.message === "Request timeout" || error.name === "AbortError") {
+        throw error
+      }
+    }
+
+    // Wait before retrying (exponential backoff)
+    if (attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt)))
+    }
+  }
+
+  throw lastError || new Error("Request failed after retries")
+}
+
+/**
  * Initialize Paystack payment
  */
 export async function initializePayment(
@@ -36,7 +105,7 @@ export async function initializePayment(
   metadata: Record<string, any>
 ): Promise<PaystackInitializeResponse> {
   try {
-    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+    const response = await retryFetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
@@ -79,7 +148,7 @@ export async function initializePayment(
  */
 export async function verifyPayment(reference: string): Promise<PaystackVerifyResponse> {
   try {
-    const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
+    const response = await retryFetch(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
@@ -136,7 +205,7 @@ export async function initializeSubscription(
   metadata: Record<string, any>
 ): Promise<PaystackInitializeResponse> {
   try {
-    const response = await fetch(`${PAYSTACK_BASE_URL}/subscription`, {
+    const response = await retryFetch(`${PAYSTACK_BASE_URL}/subscription`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,

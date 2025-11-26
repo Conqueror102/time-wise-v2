@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { PageGate } from "@/components/subscription/page-gate"
+import { FeatureGate } from "@/components/subscription/feature-gate"
 
 interface Staff {
   staffId: string
@@ -33,7 +35,7 @@ interface AttendanceRecord {
   date: string
 }
 
-export default function HistoryPage() {
+function HistoryPageContent() {
   const [staff, setStaff] = useState<Staff[]>([])
   const [selectedStaff, setSelectedStaff] = useState<string>("all")
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
@@ -362,5 +364,14 @@ export default function HistoryPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+
+export default function HistoryPage() {
+  return (
+    <PageGate feature="canAccessHistory">
+      <HistoryPageContent />
+    </PageGate>
   )
 }

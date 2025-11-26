@@ -556,17 +556,17 @@ export default function SettingsPage() {
           )}
 
           <div className="space-y-4 border-t pt-4 mt-4">
-            <h3 className="font-semibold text-gray-900">Fingerprint Verification</h3>
+            <h3 className="font-semibold text-gray-900">Biometric Verification</h3>
             
             <div className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
               settings.fingerprintEnabled ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"
             }`}>
               <div className="flex-1">
                 <Label htmlFor="fingerprintEnabled" className="cursor-pointer font-medium">
-                  Require Fingerprint Verification
+                  Require Biometric Verification
                 </Label>
                 <p className="text-sm text-gray-500 mt-1">
-                  Staff must scan their fingerprint after QR/Manual check-in (prevents buddy punching)
+                  Staff must use biometric authentication (fingerprint, Face ID, Windows Hello, etc.) after QR/Manual check-in (prevents buddy punching)
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -599,8 +599,8 @@ export default function SettingsPage() {
             {settings.fingerprintEnabled && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Staff must register their fingerprints on the check-in device. 
-                  Go to Staff Management → Click "Fingerprint" button for instructions.
+                  <strong>Note:</strong> Staff must register their biometric authentication on the check-in device. 
+                  Go to Staff Management → Click "Fingerprint" button for registration instructions.
                 </p>
               </div>
             )}

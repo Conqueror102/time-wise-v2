@@ -9,10 +9,14 @@ import { initializePayment } from "@/lib/services/paystack"
 import { PLAN_PRICES } from "@/lib/features/feature-manager"
 import { getSubscription } from "@/lib/subscription/subscription-manager"
 import { TenantError } from "@/lib/types"
+import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting
+  const rateLimitResponse = applyRateLimit(request, RateLimitPresets.PAYMENT)
+  if (rateLimitResponse) return rateLimitResponse
   try {
     const context = await withAuth(request, {
       allowedRoles: ["org_admin"],

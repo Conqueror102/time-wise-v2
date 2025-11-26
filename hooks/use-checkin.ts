@@ -28,10 +28,14 @@ export function useCheckin(tenantId: string) {
   const [statusLoading, setStatusLoading] = useState(false)
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
 
-  const checkAttendanceStatus = useCallback(async (staffId: string) => {
+  const checkAttendanceStatus = useCallback(async (staffId: string, immediate = false) => {
     if (!staffId.trim() || !tenantId) return
 
-    setStatusLoading(true)
+    // Only show loading if not immediate (for manual entry)
+    if (!immediate) {
+      setStatusLoading(true)
+    }
+
     try {
       const response = await fetch("/api/attendance/status", {
         method: "POST",
@@ -55,7 +59,9 @@ export function useCheckin(tenantId: string) {
       console.error("Status check error:", err)
       setAttendanceStatus(null)
     } finally {
-      setStatusLoading(false)
+      if (!immediate) {
+        setStatusLoading(false)
+      }
     }
   }, [tenantId])
 

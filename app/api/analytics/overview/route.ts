@@ -12,6 +12,37 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
+    // Check feature access (unless in development mode)
+    const isDevelopment = process.env.NODE_ENV === "development"
+    if (!isDevelopment) {
+      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
+      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
+      
+      const subscription = await getSubscriptionStatus(context.tenantId)
+      
+      // Check if can access analytics
+      if (!hasFeatureAccess(subscription.plan as any, "canAccessAnalytics", subscription.isTrialActive, isDevelopment)) {
+        return NextResponse.json(
+          { 
+            error: "Analytics are locked. Upgrade to Professional or Enterprise to access analytics.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
+        )
+      }
+
+      // Check if can access overview analytics
+      if (!hasFeatureAccess(subscription.plan as any, "analyticsOverview", subscription.isTrialActive, isDevelopment)) {
+        return NextResponse.json(
+          { 
+            error: "Overview analytics are not available in your plan. Upgrade to access this feature.",
+            code: "FEATURE_LOCKED"
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     const searchParams = request.nextUrl.searchParams
     const range = searchParams.get("range") || "30d"
 

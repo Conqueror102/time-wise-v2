@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Loader2, Clock } from "lucide-react"
@@ -10,10 +10,23 @@ import { Card, CardContent } from "@/components/ui/card"
 export default function PricingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
+  const [pricing, setPricing] = useState({ monthlyPrice: 4000, formattedPrice: "₦4,000" })
 
-  const handleSelectPlan = async (plan: "starter" | "professional" | "enterprise") => {
-    if (plan === "starter") {
-      // Free plan - just redirect to register
+  // Fetch dynamic pricing
+  useEffect(() => {
+    fetch("/api/pricing")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setPricing(data.pricing)
+        }
+      })
+      .catch(err => console.error("Failed to fetch pricing:", err))
+  }, [])
+
+  const handleSelectPlan = async (plan: "trial" | "paid") => {
+    if (plan === "trial") {
+      // Free trial - redirect to register
       router.push("/register")
       return
     }
@@ -30,14 +43,14 @@ export default function PricingPage() {
         return
       }
 
-      // Logged in - initialize payment
+      // Logged in - initialize payment for paid plan
       const response = await fetch("/api/payment/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan: "paid" }),
       })
 
       const data = await response.json()
@@ -98,72 +111,84 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Starter Plan */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Free Trial */}
             <Card className="border-2 border-gray-200 hover:border-blue-300 transition-all duration-300 bg-white">
               <CardContent className="p-8">
                 <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Starter</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">14-Day Free Trial</h3>
                   <div className="flex items-baseline gap-2">
                     <span className="text-5xl font-bold text-gray-900">₦0</span>
-                    <span className="text-gray-600">/month</span>
                   </div>
-                  <p className="text-gray-600 mt-2">Perfect for small teams</p>
+                  <p className="text-gray-600 mt-2">Try all features risk-free</p>
                 </div>
                 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Up to 10 staff members</span>
+                    <span className="text-gray-700">Unlimited staff members</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">QR & Manual check-in</span>
+                    <span className="text-gray-700">All check-in methods (QR, Manual, Face, Biometric)</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Basic reports</span>
+                    <span className="text-gray-700">Photo verification</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Email support</span>
+                    <span className="text-gray-700">Advanced analytics & reports</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">Export to CSV/Excel</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">Full access for 14 days</span>
                   </li>
                 </ul>
                 
                 <Button 
                   className="w-full h-12 font-medium" 
                   variant="outline"
-                  onClick={() => handleSelectPlan("starter")}
+                  onClick={() => handleSelectPlan("trial")}
                   disabled={loading !== null}
                 >
-                  {loading === "starter" ? (
+                  {loading === "trial" ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    "Get Started Free"
+                    "Start Free Trial"
                   )}
                 </Button>
+                <p className="text-xs text-center text-gray-500 mt-3">No credit card required</p>
               </CardContent>
             </Card>
 
-            {/* Professional Plan */}
+            {/* Paid Plan */}
             <Card className="border-2 border-blue-600 hover:border-blue-700 transition-all duration-300 bg-white relative shadow-xl">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-medium">
-                Most Popular
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-1 rounded-full text-sm font-medium">
+                Best Value
               </div>
               <CardContent className="p-8">
                 <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Professional</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Full Access</h3>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-gray-900">₦29k</span>
+                    <span className="text-5xl font-bold text-gray-900">{pricing.formattedPrice}</span>
                     <span className="text-gray-600">/month</span>
                   </div>
-                  <p className="text-gray-600 mt-2">For growing businesses</p>
+                  <p className="text-gray-600 mt-2">Everything you need, forever</p>
                 </div>
                 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Up to 50 staff members</span>
+                    <span className="text-gray-700 font-medium">Everything in Free Trial, plus:</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">Unlimited staff members</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -179,82 +204,37 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Export to CSV/Excel</span>
-                  </li>
-                </ul>
-                
-                <Button 
-                  className="w-full h-12 font-medium bg-blue-600 hover:bg-blue-700"
-                  onClick={() => handleSelectPlan("professional")}
-                  disabled={loading !== null}
-                >
-                  {loading === "professional" ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    "Start Free Trial"
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Enterprise Plan */}
-            <Card className="border-2 border-gray-200 hover:border-blue-300 transition-all duration-300 bg-white">
-              <CardContent className="p-8">
-                <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Enterprise</h3>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-5xl font-bold text-gray-900">₦99k</span>
-                    <span className="text-gray-600">/month</span>
-                  </div>
-                  <p className="text-gray-600 mt-2">For large organizations</p>
-                </div>
-                
-                <ul className="space-y-4 mb-8">
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Unlimited staff members</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">Custom branding</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">API access</span>
                   </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Dedicated support</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">Custom integrations</span>
-                  </li>
                 </ul>
                 
                 <Button 
-                  className="w-full h-12 font-medium" 
-                  variant="outline"
-                  onClick={() => handleSelectPlan("enterprise")}
+                  className="w-full h-12 font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                  onClick={() => handleSelectPlan("paid")}
                   disabled={loading !== null}
                 >
-                  {loading === "enterprise" ? (
+                  {loading === "paid" ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    "Start Free Trial"
+                    "Subscribe Now"
                   )}
                 </Button>
+                <p className="text-xs text-center text-gray-500 mt-3">Start with 14-day free trial</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* FAQ or Additional Info */}
+          {/* Additional Info */}
           <div className="mt-16 text-center">
             <p className="text-gray-600 mb-4">
-              All plans include a 14-day free trial with full access to features
+              Start with a 14-day free trial. No credit card required. Cancel anytime.
             </p>
             <p className="text-sm text-gray-500">
-              Need a custom plan? <a href="mailto:sales@timewise.com" className="text-blue-600 hover:underline">Contact our sales team</a>
+              Questions? <a href="mailto:support@timewise.com" className="text-blue-600 hover:underline">Contact support</a>
             </p>
           </div>
         </div>
