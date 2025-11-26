@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { authenticate } from "@/lib/auth/middleware"
 import { getDatabase } from "@/lib/mongodb"
 
 export async function POST(req: NextRequest) {
@@ -10,8 +9,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.organizationId) {
+
+    // Use JWT-based authentication
+    let context: any
+    try {
+      context = await authenticate(req)
+    } catch (err) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!context?.organization?.name && !context?.tenantId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -22,7 +28,7 @@ export async function POST(req: NextRequest) {
     const trialEndDate = isTrialActive ? new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000) : new Date(now.getTime() - 1000)
 
     await db.collection("subscriptions").updateOne(
-      { organizationId: session.user.organizationId },
+      { organizationId: context.tenantId },
       {
         $set: {
           plan,

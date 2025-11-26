@@ -4,17 +4,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/middleware/auth'
+import { withAuth } from '@/lib/auth/middleware'
 import { cancelSubscription, getSubscription } from '@/lib/subscription/subscription-manager'
 import { cancelSubscription as cancelPaystackSubscription } from '@/lib/services/paystack'
 import { getDatabase } from '@/lib/mongodb'
+import { ObjectId } from 'mongodb'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication and get tenant context
-    const context = await verifyAuth(request, ['org_admin'])
+    const context = await withAuth(request, { allowedRoles: ['org_admin'] })
     if (!context) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     // For paid plans, cancel with Paystack first
     if (subscription.paystackSubscriptionCode) {
       const db = await getDatabase()
-      const org = await db.collection('organizations').findOne({ _id: tenantId })
+      const org = await db.collection('organizations').findOne({ _id: new ObjectId(tenantId) })
       
       if (org) {
         const cancelResult = await cancelPaystackSubscription(
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Update organization status
     const db = await getDatabase()
     await db.collection('organizations').updateOne(
-      { _id: tenantId },
+      { _id: new ObjectId(tenantId) },
       {
         $set: {
           subscriptionStatus: 'cancelled',

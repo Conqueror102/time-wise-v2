@@ -7,7 +7,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Check, X } from "lucide-react"
+import { Check, X, AlertCircle } from "lucide-react"
 import { SUBSCRIPTION_PLANS } from "@/lib/subscription-plans"
 
 interface UpgradeModalProps {
@@ -16,6 +16,9 @@ interface UpgradeModalProps {
   onUpgrade: (plan: "professional" | "enterprise") => void
   currentPlan: string
   loading?: boolean
+  feature?: string
+  message?: string
+  recommendedPlan?: "starter" | "professional" | "enterprise"
 }
 
 export function UpgradeModal({
@@ -23,9 +26,14 @@ export function UpgradeModal({
   onClose,
   onUpgrade,
   currentPlan,
-  loading = false
+  loading = false,
+  feature,
+  message,
+  recommendedPlan
 }: UpgradeModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<"professional" | "enterprise">("professional")
+  const [selectedPlan, setSelectedPlan] = useState<"professional" | "enterprise">(
+    (recommendedPlan && recommendedPlan !== "starter" ? recommendedPlan : "professional") as "professional" | "enterprise"
+  )
 
   if (!isOpen) return null
 
@@ -42,7 +50,10 @@ export function UpgradeModal({
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold">Upgrade Your Plan</h2>
+          <div>
+            <h2 className="text-2xl font-bold">Upgrade Your Plan</h2>
+            {feature && <p className="text-sm text-gray-600 mt-1">{feature}</p>}
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -50,6 +61,13 @@ export function UpgradeModal({
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {message && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-amber-800">{message}</p>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           {availablePlans.map((plan) => (

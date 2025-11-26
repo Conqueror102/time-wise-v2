@@ -20,8 +20,9 @@ import { ManualEntryTab } from "@/components/checkin/manual-entry-tab"
 import { QRScannerTab } from "@/components/checkin/qr-scanner-tab"
 import { useCheckin } from "@/hooks/use-checkin"
 import { useToast } from "@/hooks/use-toast"
+import { useSubscriptionPayment } from "@/hooks/use-subscription-payment"
 import { Toaster } from "@/components/ui/toaster"
-import { UpgradePopup } from "@/components/subscription/upgrade-popup"
+import { UpgradeModal } from "@/components/subscription/upgrade-modal"
 import { getFeatureGateMessage, getRecommendedPlan } from "@/lib/features/feature-manager"
 
 export default function CheckInPage() {
@@ -54,6 +55,9 @@ export default function CheckInPage() {
 
   // Toast notifications
   const { toast } = useToast()
+  
+  // Payment hook
+  const { initiateUpgradePayment, loading: paymentLoading } = useSubscriptionPayment()
 
   // Use custom hook for check-in logic
   const {
@@ -97,13 +101,14 @@ export default function CheckInPage() {
         const canUsePhoto = isDev || subData.plan === "professional" || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
         const canUseFingerprint = isDev || subData.plan === "enterprise"
         
-        setCapturePhotos(data.capturePhotos && canUsePhoto)
-        setFingerprintEnabled(data.fingerprintEnabled && canUseFingerprint)
+  setCapturePhotos(data.capturePhotos && canUsePhoto)
+  // Ensure we always pass a boolean to the state setter
+  setFingerprintEnabled(!!(data.fingerprintEnabled && canUseFingerprint))
       })
       .catch(() => {
-        // Fallback if subscription check fails
-        setCapturePhotos(data.capturePhotos)
-        setFingerprintEnabled(data.fingerprintEnabled || false)
+  // Fallback if subscription check fails - coerce to boolean
+  setCapturePhotos(data.capturePhotos)
+  setFingerprintEnabled(!!data.fingerprintEnabled)
       })
     
     setIsInTrial(data.isInTrial || false)
@@ -559,10 +564,26 @@ export default function CheckInPage() {
     <>
       <Toaster />
       
-      {/* Upgrade Popup */}
-      <UpgradePopup
+      {/* Upgrade Modal */}
+      <UpgradeModal
         isOpen={showUpgradePopup}
         onClose={() => setShowUpgradePopup(false)}
+        onUpgrade={(plan: "professional" | "enterprise") => {
+          initiateUpgradePayment({
+            plan,
+            onSuccess: () => {
+              setShowUpgradePopup(false)
+            },
+            onError: (error) => {
+              toast({
+                variant: "destructive",
+                title: "Payment Error",
+                description: error,
+              })
+            },
+          })
+        }}
+        loading={paymentLoading}
         feature={upgradeFeature === "fingerprintCheckIn" ? "Fingerprint Verification" : "Photo Verification"}
         message={getFeatureGateMessage(upgradeFeature, subscriptionPlan)}
         currentPlan={subscriptionPlan}

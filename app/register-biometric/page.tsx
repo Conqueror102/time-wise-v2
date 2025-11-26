@@ -17,7 +17,7 @@ import { FaceRecognition } from "@/components/face-recognition"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 
-export default function RegisterBiometricContent() {
+function RegisterBiometricContent() {
   const searchParams = useSearchParams()
   const [step, setStep] = useState<"verify" | "register">("verify")
   const [staffId, setStaffId] = useState("")
@@ -338,5 +338,23 @@ export default function RegisterBiometricContent() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrapper component with Suspense boundary
+export default function RegisterBiometricPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-0 shadow-xl">
+          <CardContent className="p-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-center text-gray-600 mt-4">Loading registration...</p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <RegisterBiometricContent />
+    </Suspense>
   )
 }

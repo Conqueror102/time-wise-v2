@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/middleware/auth'
+import { withAuth } from '@/lib/auth/middleware'
 import { getSubscription, cancelScheduledDowngrade } from '@/lib/subscription/subscription-manager'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication and get tenant context
-    const context = await verifyAuth(request, ['org_admin'])
+    const context = await withAuth(request, { allowedRoles: ['org_admin'] })
     if (!context) {
       return NextResponse.json(
         { error: 'Unauthorized' },

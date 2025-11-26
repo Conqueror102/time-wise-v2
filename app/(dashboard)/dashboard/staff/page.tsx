@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { canAddStaff, PLAN_FEATURES, type PlanType, getFeatureGateMessage, getRecommendedPlan } from "@/lib/features/feature-manager"
 import { useToast } from "@/hooks/use-toast"
+import { useSubscriptionPayment } from "@/hooks/use-subscription-payment"
 import { Toaster } from "@/components/ui/toaster"
 import {
   Dialog,
@@ -23,7 +24,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { QRDownloadButton } from "@/components/qr-download-button"
 import { useSubscription } from "@/hooks/use-subscription"
-import { UpgradePopup } from "@/components/subscription/upgrade-popup"
+import { UpgradeModal } from "@/components/subscription/upgrade-modal"
 
 interface Staff {
   _id: string
@@ -40,6 +41,7 @@ interface Staff {
 export default function StaffPage() {
   const { toast } = useToast()
   const { hasFeature, canAddStaff: canAddStaffHook, subscription } = useSubscription()
+  const { initiateUpgradePayment } = useSubscriptionPayment()
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -248,13 +250,26 @@ export default function StaffPage() {
       <Toaster />
       
       {/* Upgrade Popup */}
-      <UpgradePopup
+      <UpgradeModal
         isOpen={showUpgradePopup}
         onClose={() => setShowUpgradePopup(false)}
-        feature={upgradeFeature === "canAddStaff" ? "Add Staff" : "Edit Staff"}
-        message={getFeatureGateMessage(upgradeFeature, subscription?.plan || "starter")}
+        onUpgrade={(plan: "professional" | "enterprise") => {
+          initiateUpgradePayment({
+            plan,
+            onSuccess: () => {
+              setShowUpgradePopup(false)
+            },
+            onError: (error) => {
+              toast({
+                variant: "destructive",
+                title: "Payment Error",
+                description: error,
+              })
+            },
+          })
+        }}
+        loading={false}
         currentPlan={subscription?.plan || "starter"}
-        recommendedPlan={getRecommendedPlan(upgradeFeature)}
       />
       
       <div className="space-y-6">
