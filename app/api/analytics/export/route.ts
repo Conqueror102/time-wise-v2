@@ -71,15 +71,28 @@ export async function GET(request: NextRequest) {
       Status: record.isLate ? "Late" : record.isEarly ? "Early" : "On Time",
     }))
 
+    if (exportData.length === 0) {
+      return new NextResponse("No data available for the selected date range", {
+        status: 404,
+        headers: { "Content-Type": "text/plain" },
+      })
+    }
+
     if (format === "csv") {
       // Generate CSV
       const headers = Object.keys(exportData[0] || {})
+      const escapeCsvValue = (value: string) => {
+        if (value.includes('"') || value.includes(',') || value.includes('\n')) {
+          return `"${value.replace(/"/g, '""')}"`
+        }
+        return `"${value}"`
+      }
       const csvRows = [
         headers.join(","),
         ...exportData.map(row => 
           headers.map(header => {
             const value = row[header as keyof typeof row]
-            return `"${value}"`
+            return escapeCsvValue(String(value))
           }).join(",")
         )
       ]

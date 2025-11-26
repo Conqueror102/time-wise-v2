@@ -5,7 +5,7 @@
  * Shows upgrade modal when trying to access locked pages
  */
 
-import { ReactNode, useState } from "react"
+import { ReactNode, useState, useEffect } from "react"
 import { useSubscription } from "@/hooks/use-subscription"
 import { PlanFeatures, getFeatureGateMessage } from "@/lib/features/feature-manager"
 import { UpgradeModal } from "./upgrade-modal"
@@ -18,6 +18,13 @@ interface PageGateProps {
 export function PageGate({ feature, children }: PageGateProps) {
   const { hasFeature, subscription, loading } = useSubscription()
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
+  // Show modal immediately when page is locked
+  useEffect(() => {
+    if (!loading && !hasFeature(feature)) {
+      setShowUpgradeModal(true)
+    }
+  }, [loading, feature, hasFeature])
 
   if (loading) {
     return (
@@ -34,11 +41,6 @@ export function PageGate({ feature, children }: PageGateProps) {
 
   if (hasAccess) {
     return <>{children}</>
-  }
-
-  // Show modal immediately when page is locked
-  if (!showUpgradeModal) {
-    setShowUpgradeModal(true)
   }
 
   // Page is locked - show modal

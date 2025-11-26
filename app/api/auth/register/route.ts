@@ -100,6 +100,11 @@ export async function POST(request: NextRequest) {
         maxStaff: 10,
         allowedMethods: ["qr", "manual"],
         timezone: "UTC",
+        // Photo settings default: capture disabled, retention fixed at 7 days
+        capturePhotos: false,
+        photoRetentionDays: 7,
+        // Fingerprint disabled by default for starter accounts
+        fingerprintEnabled: false,
       },
     }
 

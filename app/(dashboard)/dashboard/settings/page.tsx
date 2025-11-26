@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CheckInUrlCopy } from "@/components/dashboard/check-in-url-copy"
 import { PLAN_FEATURES, PLAN_PRICES, hasFeatureAccess, type PlanType, type PlanFeatures } from "@/lib/features/feature-manager"
 
 export default function SettingsPage() {
@@ -29,7 +30,6 @@ export default function SettingsPage() {
     timezone: "UTC",
     checkInPasscode: "",
     capturePhotos: false,
-    photoRetentionDays: 7,
     fingerprintEnabled: false,
     enabledCheckInMethods: {
       qrCode: true,
@@ -66,7 +66,6 @@ export default function SettingsPage() {
           timezone: org.settings?.timezone || "UTC",
           checkInPasscode: org.settings?.checkInPasscode || "",
           capturePhotos: capturePhotos,
-          photoRetentionDays: org.settings?.photoRetentionDays || 7,
           fingerprintEnabled: fingerprintEnabled,
           enabledCheckInMethods: org.settings?.enabledCheckInMethods || {
             qrCode: true,
@@ -146,7 +145,6 @@ export default function SettingsPage() {
         timezone: data.organization.settings?.timezone || "UTC",
         checkInPasscode: data.organization.settings?.checkInPasscode || "",
         capturePhotos: data.organization.settings?.capturePhotos === true,
-        photoRetentionDays: data.organization.settings?.photoRetentionDays || 7,
         fingerprintEnabled: data.organization.settings?.fingerprintEnabled === true,
         enabledCheckInMethods: data.organization.settings?.enabledCheckInMethods || {
           qrCode: true,
@@ -322,6 +320,12 @@ export default function SettingsPage() {
             </p>
           </div>
 
+          {/* Copy Check-In URL */}
+          <div className="space-y-2 border-t pt-4 mt-4">
+            <Label>Copy Check-In URL</Label>
+            <CheckInUrlCopy organization={organization} />
+          </div>
+
           <div className="space-y-4 border-t pt-4 mt-4">
             <h3 className="font-semibold text-gray-900">Photo Verification</h3>
             
@@ -364,19 +368,10 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Photo retention is fixed at 7 days and not editable */}
             <div className="space-y-2">
-              <Label htmlFor="photoRetentionDays">Photo Retention Period (Days)</Label>
-              <Input
-                id="photoRetentionDays"
-                type="number"
-                min="1"
-                max="30"
-                value={settings.photoRetentionDays}
-                onChange={(e) => setSettings({ ...settings, photoRetentionDays: parseInt(e.target.value) || 7 })}
-              />
-              <p className="text-xs text-gray-500">
-                Photos will be automatically deleted after this many days (default: 7 days)
-              </p>
+              <Label>Photo Retention Period</Label>
+              <p className="text-sm text-gray-600">Photos are retained for 7 days (managed automatically).</p>
             </div>
           </div>
 

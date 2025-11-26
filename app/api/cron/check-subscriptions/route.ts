@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
     // Verify cron secret to prevent unauthorized access
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET || 'dev-cron-secret'
+    const isProduction = process.env.NODE_ENV === 'production'
+    
+    if (isProduction && !process.env.CRON_SECRET) {
+      console.error('[CRON] CRON_SECRET not configured in production')
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
     
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json(

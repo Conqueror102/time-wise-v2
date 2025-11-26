@@ -159,16 +159,30 @@ export function applyRateLimit(
 
 /**
  * Get rate limit headers for successful requests
+ * Read-only operation that doesn't increment the counter
  */
 export function getRateLimitHeaders(
   identifier: string,
   config: RateLimitConfig
 ): Record<string, string> {
-  const result = rateLimit(identifier, { ...config, maxRequests: config.maxRequests + 1 })
-  
+  const now = Date.now()
+  const record = rateLimitMap.get(identifier)
+
+  let remaining: number
+  let resetTime: number
+
+  if (!record || now > record.resetTime) {
+    // No active window yet – everything still available
+    remaining = config.maxRequests
+    resetTime = now + config.windowMs
+  } else {
+    remaining = Math.max(0, config.maxRequests - record.count)
+    resetTime = record.resetTime
+  }
+
   return {
-    'X-RateLimit-Limit': config.maxRequests.toString(),
-    'X-RateLimit-Remaining': Math.max(0, result.remaining - 1).toString(),
-    'X-RateLimit-Reset': new Date(result.resetTime).toISOString(),
+    "X-RateLimit-Limit": config.maxRequests.toString(),
+    "X-RateLimit-Remaining": remaining.toString(),
+    "X-RateLimit-Reset": new Date(resetTime).toISOString(),
   }
 }

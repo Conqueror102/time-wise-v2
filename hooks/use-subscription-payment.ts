@@ -31,10 +31,12 @@ export function useSubscriptionPayment() {
 
     try {
       // Call the upgrade endpoint to initialize payment
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
       const response = await fetch('/api/subscription/upgrade', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           targetPlan: options.plan,
@@ -82,12 +84,11 @@ export function useSubscriptionPayment() {
         timestamp: new Date().toISOString(),
       }))
 
-      // Redirect to Paystack checkout
-      setLoading(false)
-      window.location.href = data.authorizationUrl
-
-      // Call success callback
+      // Call success callback before redirect
       options.onSuccess?.()
+      
+      // Redirect to Paystack checkout (keep loading true during navigation)
+      window.location.href = data.authorizationUrl
     } catch (err: any) {
       const errorMessage = err.message || 'An error occurred while initiating payment'
       setError(errorMessage)

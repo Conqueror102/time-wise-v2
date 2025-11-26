@@ -16,6 +16,14 @@ export function TrialExpirationBanner() {
   const { subscription, loading, isDevelopment } = useSubscription()
   const [dismissed, setDismissed] = useState(false)
 
+  // Check if already dismissed in this session - MUST be at top before any conditional returns
+  useEffect(() => {
+    const wasDismissed = sessionStorage.getItem("trialBannerDismissed")
+    if (wasDismissed) {
+      setDismissed(true)
+    }
+  }, [])
+
   // Don't show in development mode
   if (isDevelopment) {
     return null
@@ -57,14 +65,6 @@ export function TrialExpirationBanner() {
     // Store dismissal in session storage (resets on page refresh)
     sessionStorage.setItem("trialBannerDismissed", "true")
   }
-
-  // Check if already dismissed in this session
-  useEffect(() => {
-    const wasDismissed = sessionStorage.getItem("trialBannerDismissed")
-    if (wasDismissed) {
-      setDismissed(true)
-    }
-  }, [])
 
   if (isExpired) {
     // Trial has expired

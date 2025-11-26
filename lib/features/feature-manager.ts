@@ -147,11 +147,13 @@ export function hasFeatureAccess(
   }
 
   // Special handling for starter plan during trial
+  // During trial, Starter gets ALL features unlocked (full app experience)
   if (plan === "starter" && isTrialActive) {
-    // During trial, starter gets ALL features unlocked (full app experience)
-    return true // All features unlocked during trial, including fingerprint
+    // All features unlocked during trial, including fingerprint
+    return true
   }
 
+  // For non-trial starter or other plans, use PLAN_FEATURES
   const planFeatures = PLAN_FEATURES[plan]
   return planFeatures?.[feature] as boolean ?? false
 }

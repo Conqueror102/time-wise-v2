@@ -46,6 +46,18 @@ export async function POST(request: NextRequest) {
     // If on starter plan, just mark as cancelled
     if (subscription.plan === 'starter') {
       await cancelSubscription(tenantId)
+
+      // Update organization status for consistency
+      const db = await getDatabase()
+      await db.collection('organizations').updateOne(
+        { _id: new ObjectId(tenantId) },
+        {
+          $set: {
+            subscriptionStatus: 'cancelled',
+            updatedAt: new Date(),
+          },
+        }
+      )
       
       return NextResponse.json({
         success: true,
@@ -59,15 +71,24 @@ export async function POST(request: NextRequest) {
       const org = await db.collection('organizations').findOne({ _id: new ObjectId(tenantId) })
       
       if (org) {
-        const cancelResult = await cancelPaystackSubscription(
-          subscription.paystackSubscriptionCode,
-          org.adminEmail
+        // TODO: The Paystack API requires an email token, not an email address.
+        // To properly implement this, you need to:
+        // 1. Send a cancellation link to the org admin email via Paystack
+        // 2. Have the admin click the link to generate a token
+        // 3. Use that token to complete the cancellation
+        // 
+        // For now, we continue without remote cancellation and log a warning.
+        // This means the subscription may remain active in Paystack while appearing cancelled locally.
+        console.warn(
+          `Paystack subscription ${subscription.paystackSubscriptionCode} requires email token for cancellation. ` +
+          `User ${org.adminEmail} should receive cancellation link via email.`
         )
         
-        if (!cancelResult.success) {
-          console.error('Failed to cancel Paystack subscription:', cancelResult.error)
-          // Continue anyway - mark as cancelled in our system
-        }
+        // Uncomment below once email token flow is implemented:
+        // const cancelResult = await cancelPaystackSubscription(
+        //   subscription.paystackSubscriptionCode,
+        //   emailToken // This should be the token from Paystack email link
+        // )
       }
     }
 

@@ -26,6 +26,8 @@ import {
   History,
   CreditCard,
   Lock,
+  Copy,
+  CheckCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AuthenticatingScreen } from "@/components/auth/authenticating-screen"
@@ -48,6 +50,11 @@ export default function DashboardLayout({
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [lockedFeature, setLockedFeature] = useState<"canAccessAnalytics" | "canAccessHistory">("canAccessHistory")
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
+  const [checkInPasscode, setCheckInPasscode] = useState("")
+  const [checkInLoading, setCheckInLoading] = useState(false)
+  const [checkInError, setCheckInError] = useState("")
+  const [checkInCopied, setCheckInCopied] = useState(false)
 
   // Authentication is now handled by useAuthGuard
 
@@ -67,6 +74,65 @@ export default function DashboardLayout({
   const confirmLogout = () => {
     setShowLogoutModal(false)
     handleLogout()
+  }
+
+  const handleCheckInUrlCopy = async () => {
+    if (!organization?.settings?.checkInPasscode) {
+      setShowCheckInModal(true)
+      return
+    }
+
+    const checkInUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/checkin`
+    navigator.clipboard.writeText(checkInUrl)
+    setCheckInCopied(true)
+    setTimeout(() => setCheckInCopied(false), 2000)
+  }
+
+  const handleSetCheckInPasscode = async () => {
+    if (!checkInPasscode.trim()) {
+      setCheckInError("Passcode required")
+      return
+    }
+
+    setCheckInLoading(true)
+    try {
+      const token = localStorage.getItem("accessToken")
+      const response = await fetch("/api/organization/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ checkInPasscode: checkInPasscode }),
+      })
+
+      if (!response.ok) throw new Error("Failed")
+
+      // Update localStorage
+      const org = JSON.parse(localStorage.getItem("organization") || "{}")
+      org.settings = org.settings || {}
+      org.settings.checkInPasscode = checkInPasscode
+      localStorage.setItem("organization", JSON.stringify(org))
+
+      // Refresh router to ensure auth/organization hooks pick up the change
+      try {
+        router.refresh()
+      } catch (e) {
+        // ignore if router.refresh isn't available in older Next versions
+      }
+
+      // Copy URL
+      const checkInUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/checkin`
+      navigator.clipboard.writeText(checkInUrl)
+      setCheckInCopied(true)
+      setShowCheckInModal(false)
+      setCheckInPasscode("")
+      setTimeout(() => setCheckInCopied(false), 2000)
+    } catch {
+      setCheckInError("Error saving passcode")
+    } finally {
+      setCheckInLoading(false)
+    }
   }
 
   const mainNavItems = [
@@ -259,6 +325,24 @@ export default function DashboardLayout({
                   </Link>
                 )
               })}
+
+              {/* Copy Check-In URL */}
+              <button
+                onClick={handleCheckInUrlCopy}
+                className="flex items-center gap-3 px-4 py-2 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 w-full text-left text-sm mt-2"
+              >
+                {checkInCopied ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-green-600">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span className="font-medium">Copy Check-In</span>
+                  </>
+                )}
+              </button>
             </div>
           </nav>
 
@@ -347,6 +431,71 @@ export default function DashboardLayout({
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Check-In Passcode Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Lock className="w-5 h-5" />
+                Set Check-In Passcode
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCheckInModal(false)
+                  setCheckInPasscode("")
+                  setCheckInError("")
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-4 text-sm">
+              Staff need a passcode to unlock the check-in page. Set one now to copy the check-in URL.
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="e.g., 1234"
+                value={checkInPasscode}
+                onChange={(e) => {
+                  setCheckInPasscode(e.target.value)
+                  setCheckInError("")
+                }}
+                disabled={checkInLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-center text-lg tracking-widest focus:outline-none focus:border-blue-500"
+                autoFocus
+              />
+              {checkInError && (
+                <p className="text-sm text-red-600">{checkInError}</p>
+              )}
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCheckInModal(false)
+                    setCheckInPasscode("")
+                    setCheckInError("")
+                  }}
+                  disabled={checkInLoading}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSetCheckInPasscode}
+                  disabled={checkInLoading || !checkInPasscode.trim()}
+                  className="flex-1"
+                >
+                  {checkInLoading ? "Setting..." : "Set & Copy"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

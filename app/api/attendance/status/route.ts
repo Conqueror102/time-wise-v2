@@ -22,16 +22,6 @@ export async function POST(request: NextRequest) {
     
     const currentDate = new Date().toISOString().split("T")[0]
 
-    // Ensure index exists for faster queries (runs once, then cached)
-    try {
-      await tenantDb.collection("attendance").createIndex(
-        { staffId: 1, date: -1 },
-        { background: true }
-      )
-    } catch (e) {
-      // Index might already exist, ignore error
-    }
-
     // Get today's attendance record
     const todayRecord = await tenantDb.findOne<AttendanceLog>("attendance", {
       staffId,
