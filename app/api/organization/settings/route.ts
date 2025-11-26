@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
       timezone,
       checkInPasscode,
       capturePhotos,
-      photoRetentionDays,
+      // photoRetentionDays removed - retention is fixed to 7 days by default
       fingerprintEnabled,
       enabledCheckInMethods,
     } = body
@@ -48,7 +48,7 @@ export async function PATCH(request: NextRequest) {
     if (timezone !== undefined) updateData["settings.timezone"] = timezone
     if (checkInPasscode !== undefined) updateData["settings.checkInPasscode"] = checkInPasscode
     if (capturePhotos !== undefined) updateData["settings.capturePhotos"] = capturePhotos
-    if (photoRetentionDays !== undefined) updateData["settings.photoRetentionDays"] = photoRetentionDays
+    // Intentionally ignore photoRetentionDays updates; retention is fixed at 7 days
     if (fingerprintEnabled !== undefined) updateData["settings.fingerprintEnabled"] = fingerprintEnabled
     if (enabledCheckInMethods !== undefined) updateData["settings.enabledCheckInMethods"] = enabledCheckInMethods
 

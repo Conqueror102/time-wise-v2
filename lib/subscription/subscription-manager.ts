@@ -109,6 +109,40 @@ export async function updateSubscriptionAfterPayment(
       },
     }
   )
+  
+  // Update organization record to reflect new plan and enable default features
+  try {
+    const orgUpdate: any = {
+      subscriptionTier: plan,
+      subscriptionStatus: "active",
+      updatedAt: now,
+    }
+
+    // Default settings applied on upgrade
+    if (plan === "professional") {
+      // Professional: enable photo verification by default
+      orgUpdate["settings.capturePhotos"] = true
+      orgUpdate["settings.photoRetentionDays"] = 7
+      // Ensure allowed methods include photo
+      orgUpdate["allowedMethods"] = ["qr", "manual", "photo"]
+    }
+
+    if (plan === "enterprise") {
+      // Enterprise: enable fingerprint and photo by default
+      orgUpdate["settings.capturePhotos"] = true
+      orgUpdate["settings.photoRetentionDays"] = 7
+      orgUpdate["settings.fingerprintEnabled"] = true
+      // Ensure allowed methods include fingerprint and photo
+      orgUpdate["allowedMethods"] = ["qr", "manual", "photo", "fingerprint"]
+    }
+
+    await db.collection("organizations").updateOne(
+      { _id: new ObjectId(organizationId) },
+      { $set: orgUpdate }
+    )
+  } catch (err) {
+    console.error(`Warning: Failed to update organization settings for ${organizationId}:`, err)
+  }
 }
 
 /**
@@ -190,8 +224,12 @@ export async function processScheduledDowngrades(): Promise<void> {
     try {
       const targetPlan = subscription.scheduledDowngrade.targetPlan
 
-      // Update subscription to new plan
-      await db.collection("subscriptions").updateOne(
+      // Note: MongoDB 6.0+ supports transactions. In a production system with high availability
+      // requirements, wrap both updates in a transaction to ensure atomicity.
+      // For now, we rely on careful error handling and verify subscription update succeeded first.
+      
+      // Update subscription to new plan first (primary operation)
+      const subResult = await db.collection("subscriptions").updateOne(
         { _id: subscription._id },
         {
           $set: {
@@ -205,16 +243,23 @@ export async function processScheduledDowngrades(): Promise<void> {
         }
       )
 
-      // Update organization tier
-      await db.collection("organizations").updateOne(
-        { _id: new ObjectId(subscription.organizationId) },
-        {
-          $set: {
-            subscriptionTier: targetPlan,
-            updatedAt: now,
-          },
+      // Only update organization if subscription update succeeded
+      if (subResult.modifiedCount > 0) {
+        try {
+          await db.collection("organizations").updateOne(
+            { _id: new ObjectId(subscription.organizationId) },
+            {
+              $set: {
+                subscriptionTier: targetPlan,
+                updatedAt: now,
+              },
+            }
+          )
+        } catch (orgError) {
+          // Log error but don't fail - subscription is already updated
+          console.error(`Warning: Failed to update organization tier for ${subscription.organizationId}:`, orgError)
         }
-      )
+      }
 
       console.log(`Downgraded subscription ${subscription._id} to ${targetPlan}`)
     } catch (error) {
@@ -245,6 +290,7 @@ export async function cancelScheduledDowngrade(organizationId: string): Promise<
 
 /**
  * Downgrade subscription immediately (for starter plan)
+ * Note: Both operations update separately. For full atomicity, use MongoDB transactions (6.0+)
  */
 export async function downgradeSubscription(
   organizationId: string,
@@ -253,7 +299,8 @@ export async function downgradeSubscription(
   const db = await getDatabase()
   const now = new Date()
 
-  await db.collection("subscriptions").updateOne(
+  // Update subscription first (primary operation)
+  const subResult = await db.collection("subscriptions").updateOne(
     { organizationId },
     {
       $set: {
@@ -271,16 +318,22 @@ export async function downgradeSubscription(
     }
   )
 
-  // Update organization tier
-  await db.collection("organizations").updateOne(
-    { _id: new ObjectId(organizationId) },
-    {
-      $set: {
-        subscriptionTier: targetPlan,
-        updatedAt: now,
-      },
+  // Update organization tier - if this fails, subscription is already updated
+  if (subResult.modifiedCount > 0) {
+    try {
+      await db.collection("organizations").updateOne(
+        { _id: new ObjectId(organizationId) },
+        {
+          $set: {
+            subscriptionTier: targetPlan,
+            updatedAt: now,
+          },
+        }
+      )
+    } catch (error) {
+      console.error(`Warning: Failed to update organization tier for ${organizationId}:`, error)
     }
-  )
+  }
 }
 
 /**
@@ -311,19 +364,22 @@ export async function getSubscriptionStatus(organizationId: string): Promise<{
 
   const isActive = subscription.status === "active"
   let trialDaysRemaining: number | null = null
+  
+  // Ensure isTrialActive is explicitly set
+  const isTrialActive = subscription.isTrialActive === true
 
-  if (subscription.plan === "starter" && subscription.trialEndDate && subscription.isTrialActive) {
+  if (subscription.plan === "starter" && isTrialActive && subscription.trialEndDate) {
     const diff = subscription.trialEndDate.getTime() - getUTCDate().getTime()
     trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  const needsUpgrade = subscription.plan === "starter" && !subscription.isTrialActive
+  const needsUpgrade = subscription.plan === "starter" && !isTrialActive
 
   return {
     plan: subscription.plan,
     status: subscription.status,
     isActive,
-    isTrialActive: subscription.isTrialActive ?? false,
+    isTrialActive,
     needsUpgrade,
     trialDaysRemaining,
     features: subscription,

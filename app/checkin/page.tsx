@@ -89,27 +89,42 @@ export default function CheckInPage() {
     setTenantId(data.tenantId)
     setOrganizationName(data.organizationName)
     
-    // Fetch subscription status to check feature access
-    fetch("/api/subscription/status")
-      .then(res => res.json())
-      .then(subData => {
-        setSubscriptionPlan(subData.plan || "starter")
-        setSubscriptionTrialActive(subData.isTrialActive || false)
-        
-        // Only enable features if subscription allows
+    // Fetch subscription status to check feature access (include token in prod)
+    ;(async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+        const headers: Record<string, string> = {}
+        if (token) headers["Authorization"] = `Bearer ${token}`
+
+        const res = await fetch("/api/subscription/status", { headers })
+        if (res.ok) {
+          const subData = await res.json()
+          setSubscriptionPlan(subData.plan || "starter")
+          setSubscriptionTrialActive(subData.isTrialActive || false)
+
+          // Only enable features if subscription allows
+          const isDev = process.env.NODE_ENV === "development"
+          const canUsePhoto = isDev || subData.plan === "professional" || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
+          const canUseFingerprint = isDev || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
+
+          setCapturePhotos(!!(data.capturePhotos && canUsePhoto))
+          setFingerprintEnabled(!!(data.fingerprintEnabled && canUseFingerprint))
+        } else {
+          // If status endpoint returned non-OK, fall back conservatively
+          const isDev = process.env.NODE_ENV === "development"
+          setCapturePhotos(isDev ? data.capturePhotos : false)
+          setFingerprintEnabled(isDev ? !!data.fingerprintEnabled : false)
+        }
+      } catch (err) {
+        // Fallback if subscription check fails - disable gated features for security
         const isDev = process.env.NODE_ENV === "development"
-        const canUsePhoto = isDev || subData.plan === "professional" || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
-        const canUseFingerprint = isDev || subData.plan === "enterprise"
-        
-  setCapturePhotos(data.capturePhotos && canUsePhoto)
-  // Ensure we always pass a boolean to the state setter
-  setFingerprintEnabled(!!(data.fingerprintEnabled && canUseFingerprint))
-      })
-      .catch(() => {
-  // Fallback if subscription check fails - coerce to boolean
-  setCapturePhotos(data.capturePhotos)
-  setFingerprintEnabled(!!data.fingerprintEnabled)
-      })
+        setCapturePhotos(isDev ? data.capturePhotos : false)
+        setFingerprintEnabled(isDev ? !!data.fingerprintEnabled : false)
+        if (!isDev && typeof document !== 'undefined') {
+          console.warn('Unable to verify subscription status - some features disabled for security')
+        }
+      }
+    })()
     
     setIsInTrial(data.isInTrial || false)
     setEnabledCheckInMethods(data.enabledCheckInMethods || {

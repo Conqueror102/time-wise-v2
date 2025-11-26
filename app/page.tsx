@@ -34,50 +34,57 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="container mx-auto px-4 lg:px-8 py-20 lg:py-32">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full text-blue-600 text-sm font-medium">
-            <Sparkles className="w-4 h-4" />
-            <span>Modern Attendance Management</span>
-          </div>
-          
-          <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 leading-tight tracking-tight">
-            Time Tracking Made
-            <span className="text-blue-600"> Simple</span>
-          </h1>
-          
-          <p className="text-xl lg:text-2xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Streamline workforce management with intelligent attendance tracking. 
-            Built for modern teams who value simplicity and precision.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link href="/register">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-lg px-8 h-14 font-medium">
-                Start Free Trial
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button size="lg" variant="outline" className="text-lg px-8 h-14 font-medium border-2">
-                View Pricing
-              </Button>
-            </Link>
-          </div>
-          
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-500 pt-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span>14-day free trial</span>
+      {/* Hero Section - Compact */}
+      <section className="container mx-auto px-4 lg:px-8 py-16 lg:py-20">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full text-blue-600 text-sm font-medium">
+              <Sparkles className="w-4 h-4" />
+              <span>Attendance, simplified</span>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span>No credit card required</span>
+
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-gray-900">
+              Effortless Staff Check‑ins
+            </h1>
+
+            <p className="text-lg text-gray-600 max-w-lg">
+              Quick QR, biometric, or manual check‑ins — instant reports, zero confusion.
+            </p>
+
+            <div className="flex items-center gap-3 mt-4">
+              <Link href="/register">
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-6 h-12 font-semibold">
+                  Start 14‑day Free Trial
+                </Button>
+              </Link>
+              <Link href="#pricing">
+                <Button size="lg" variant="outline" className="px-6 h-12">
+                  See Pricing
+                </Button>
+              </Link>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span>Cancel anytime</span>
+
+            <div className="flex items-center gap-6 text-sm text-gray-500 mt-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span>14‑day trial</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span>No card needed</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center justify-center">
+            <div className="w-64 h-40 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl flex flex-col items-center justify-center border border-gray-100">
+              <svg className="w-12 h-12 text-blue-600" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor" />
+                <rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor" opacity="0.6" />
+                <rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor" opacity="0.4" />
+                <rect x="13" y="13" width="8" height="8" rx="2" fill="currentColor" opacity="0.2" />
+              </svg>
+              <p className="text-sm text-gray-700 mt-2">Live check‑ins • Instant reports</p>
             </div>
           </div>
         </div>

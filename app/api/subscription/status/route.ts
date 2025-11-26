@@ -37,6 +37,11 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
   }
 
   const status = await getSubscriptionStatus(decoded.tenantId)
+  
+  // Debug logging
+  if (status.isTrialActive) {
+    console.log(`[Subscription] Trial active for ${decoded.tenantId}: days remaining = ${status.trialDaysRemaining}`)
+  }
 
   return NextResponse.json(status)
 })

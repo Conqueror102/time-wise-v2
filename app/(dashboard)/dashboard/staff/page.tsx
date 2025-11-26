@@ -41,7 +41,7 @@ interface Staff {
 export default function StaffPage() {
   const { toast } = useToast()
   const { hasFeature, canAddStaff: canAddStaffHook, subscription } = useSubscription()
-  const { initiateUpgradePayment } = useSubscriptionPayment()
+  const { initiateUpgradePayment, loading: paymentLoading } = useSubscriptionPayment()
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -268,7 +268,7 @@ export default function StaffPage() {
             },
           })
         }}
-        loading={false}
+        loading={paymentLoading}
         currentPlan={subscription?.plan || "starter"}
       />
       
@@ -606,17 +606,19 @@ export default function StaffPage() {
                 <li>Visit: <code className="bg-blue-100 px-1 rounded">/register-biometric</code></li>
                 <li>Enter Staff ID: <strong>{selectedStaff?.staffId}</strong></li>
                 <li>Follow the biometric registration process (fingerprint, Face ID, Windows Hello, etc.)</li>
-                <li>
-                  <strong>If you're on the check-in device now:</strong>{" "}
-                  <a
-                    href={`/register-biometric?staffId=${selectedStaff?.staffId}&tenantId=${organization._id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline"
-                  >
-                    Register biometric directly
-                  </a>
-                </li>
+                {organization?._id && (
+                  <li>
+                    <strong>If you're on the check-in device now:</strong>{" "}
+                    <a
+                      href={`/register-biometric?staffId=${selectedStaff?.staffId}&tenantId=${organization._id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Register biometric directly
+                    </a>
+                  </li>
+                )}
               </ol>
             </div>
 
@@ -644,6 +646,14 @@ export default function StaffPage() {
               <Button
                 onClick={() => {
                   // Copy registration URL
+                  if (!organization?._id) {
+                    toast({
+                      variant: "destructive",
+                      title: "Error",
+                      description: "Organization ID not available",
+                    })
+                    return
+                  }
                   const url = `${window.location.origin}/register-biometric?staffId=${selectedStaff?.staffId}&tenantId=${organization._id}`
                   navigator.clipboard.writeText(url)
                   toast({
