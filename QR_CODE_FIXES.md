@@ -187,3 +187,5 @@ setMessageType("success")
 
 **Your QR code scanner is now more robust and user-friendly!** 🎉
 
+
+

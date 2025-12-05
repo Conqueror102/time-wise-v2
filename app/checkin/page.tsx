@@ -102,10 +102,16 @@ export default function CheckInPage() {
           setSubscriptionPlan(subData.plan || "starter")
           setSubscriptionTrialActive(subData.isTrialActive || false)
 
-          // Only enable features if subscription allows
+          // During 14-day trial, ALL features are available
+          // After trial ends, features are locked based on plan
           const isDev = process.env.NODE_ENV === "development"
-          const canUsePhoto = isDev || subData.plan === "professional" || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
-          const canUseFingerprint = isDev || subData.plan === "enterprise" || (subData.plan === "starter" && subData.isTrialActive)
+          const isInTrialPeriod = subData.plan === "starter" && subData.isTrialActive
+          
+          // Photo verification: Available in trial, professional, and enterprise
+          const canUsePhoto = isDev || isInTrialPeriod || subData.plan === "professional" || subData.plan === "enterprise"
+          
+          // Fingerprint verification: Available in trial and enterprise
+          const canUseFingerprint = isDev || isInTrialPeriod || subData.plan === "enterprise"
 
           setCapturePhotos(!!(data.capturePhotos && canUsePhoto))
           setFingerprintEnabled(!!(data.fingerprintEnabled && canUseFingerprint))
@@ -308,15 +314,18 @@ export default function CheckInPage() {
     
     // Check if fingerprint is locked by subscription
     const isDev = process.env.NODE_ENV === "development"
-    if (fingerprintEnabled && !isDev && subscriptionPlan !== "enterprise") {
+    const isInTrialPeriod = subscriptionPlan === "starter" && subscriptionTrialActive
+    
+    // Fingerprint check: Only available in trial period or enterprise plan
+    if (fingerprintEnabled && !isDev && !isInTrialPeriod && subscriptionPlan !== "enterprise") {
       setUpgradeFeature("fingerprintCheckIn")
       setShowUpgradePopup(true)
       return
     }
     
-    // Check if photo verification is locked by subscription
+    // Photo verification check: Available in trial, professional, or enterprise
     if (capturePhotos && !isDev) {
-      const canUsePhoto = subscriptionPlan === "professional" || subscriptionPlan === "enterprise" || (subscriptionPlan === "starter" && subscriptionTrialActive)
+      const canUsePhoto = isInTrialPeriod || subscriptionPlan === "professional" || subscriptionPlan === "enterprise"
       if (!canUsePhoto) {
         setUpgradeFeature("photoVerification")
         setShowUpgradePopup(true)
