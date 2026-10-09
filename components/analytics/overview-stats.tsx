@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { AnalyticsError } from "@/components/analytics/analytics-error"
 import { Card, CardContent } from "@/components/ui/card"
 import { Users, UserCheck, UserX, Clock, TrendingUp, TrendingDown } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,31 +24,7 @@ interface Stats {
 }
 
 export function OverviewStats({ timeRange }: OverviewStatsProps) {
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchStats()
-  }, [timeRange])
-
-  const fetchStats = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch(`/api/analytics/overview?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const data = await response.json()
-      setStats(data)
-    } catch (error) {
-      console.error("Failed to fetch stats:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const { data: stats, loading, error } = useAnalytics<Stats>("/api/analytics/overview", timeRange)
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -60,6 +37,10 @@ export function OverviewStats({ timeRange }: OverviewStatsProps) {
         ))}
       </div>
     )
+  }
+
+  if (error) {
+    return <AnalyticsError message={error} />
   }
 
   const statCards = [
@@ -79,6 +60,8 @@ export function OverviewStats({ timeRange }: OverviewStatsProps) {
       textColor: "text-green-600",
       bgLight: "bg-green-50",
       trend: stats?.trends?.attendance,
+      trendUnit: " pts",
+      higherIsBetter: true,
     },
     {
       title: "Late Arrivals",
@@ -88,9 +71,11 @@ export function OverviewStats({ timeRange }: OverviewStatsProps) {
       textColor: "text-orange-600",
       bgLight: "bg-orange-50",
       trend: stats?.trends?.lateness,
+      trendUnit: "%",
+      higherIsBetter: false,
     },
     {
-      title: "Absentees",
+      title: "Absent Today",
       value: stats?.absentees || 0,
       icon: UserX,
       color: "bg-red-600",
@@ -110,14 +95,12 @@ export function OverviewStats({ timeRange }: OverviewStatsProps) {
                 <p className="text-3xl font-bold text-gray-900 mb-2">{stat.value}</p>
                 
                 {stat.trend !== undefined && (
-                  <div className="flex items-center gap-1">
-                    {stat.trend >= 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-600" />
-                    )}
-                    <span className={`text-sm font-medium ${stat.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {Math.abs(stat.trend)}%
+                  <div className={`flex items-center gap-1 ${
+                    stat.trend === 0 ? "text-gray-500" : (stat.trend > 0) === stat.higherIsBetter ? "text-green-600" : "text-red-600"
+                  }`}>
+                    {stat.trend >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    <span className="text-sm font-medium">
+                      {stat.trend > 0 ? "+" : stat.trend < 0 ? "−" : ""}{Math.abs(stat.trend)}{stat.trendUnit}
                     </span>
                     <span className="text-sm text-gray-500">vs last period</span>
                   </div>

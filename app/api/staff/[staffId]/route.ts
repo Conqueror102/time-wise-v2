@@ -7,21 +7,23 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, TenantError } from "@/lib/types"
+import { deleteFace } from "@/lib/services/face-recognition"
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { staffId: string } }
+  { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
+    const { staffId } = await params
     const context = await withAuth(request)
 
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
     // Find staff within tenant
-    const staff = await tenantDb.findOne<Staff>("staff", { staffId: params.staffId })
+    const staff = await tenantDb.findOne<Staff>("staff", { staffId: staffId })
 
     if (!staff) {
       return NextResponse.json(
@@ -56,32 +58,13 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { staffId: string } }
+  { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
+    const { staffId } = await params
     const context = await withAuth(request, {
       allowedRoles: ["org_admin", "manager"],
     })
-
-    // Check feature access (unless in development mode)
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (!isDevelopment) {
-      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
-      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
-      
-      const subscription = await getSubscriptionStatus(context.tenantId)
-      
-      // Check if can edit staff
-      if (!hasFeatureAccess(subscription.plan as any, "canEditStaff", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Your trial has expired. Upgrade to Professional or Enterprise to edit staff members.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-    }
 
     const body = await request.json()
     const { name, email, department, position, isActive } = body
@@ -89,18 +72,36 @@ export async function PATCH(
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Build update object
+    // Build update object; required text fields may not be blanked
     const updateData: any = { updatedAt: new Date() }
-    if (name !== undefined) updateData.name = name
-    if (email !== undefined) updateData.email = email
-    if (department !== undefined) updateData.department = department
-    if (position !== undefined) updateData.position = position
-    if (isActive !== undefined) updateData.isActive = isActive
+    for (const [field, value] of Object.entries({ name, department, position })) {
+      if (value === undefined) continue
+      if (typeof value !== "string" || !value.trim()) {
+        return NextResponse.json({ error: `${field[0].toUpperCase()}${field.slice(1)} is required` }, { status: 400 })
+      }
+      updateData[field] = value.trim()
+    }
+    if (email !== undefined) {
+      const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+      if (normalizedEmail) {
+        const existing = await tenantDb.findOne<Staff>("staff", { email: normalizedEmail, staffId: { $ne: staffId } })
+        if (existing) {
+          return NextResponse.json({ error: "Another staff member already uses this email" }, { status: 400 })
+        }
+      }
+      updateData.email = normalizedEmail
+    }
+    if (isActive !== undefined) {
+      if (typeof isActive !== "boolean") {
+        return NextResponse.json({ error: "isActive must be true or false" }, { status: 400 })
+      }
+      updateData.isActive = isActive
+    }
 
     // Update staff
     const updated = await tenantDb.updateOne<Staff>(
       "staff",
-      { staffId: params.staffId },
+      { staffId: staffId },
       { $set: updateData }
     )
 
@@ -112,7 +113,7 @@ export async function PATCH(
     }
 
     // Fetch updated staff
-    const staff = await tenantDb.findOne<Staff>("staff", { staffId: params.staffId })
+    const staff = await tenantDb.findOne<Staff>("staff", { staffId: staffId })
 
     return NextResponse.json({
       success: true,
@@ -141,9 +142,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { staffId: string } }
+  { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
+    const { staffId } = await params
     const context = await withAuth(request, {
       allowedRoles: ["org_admin"],
     })
@@ -151,15 +153,18 @@ export async function DELETE(
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Delete staff
-    const deleted = await tenantDb.deleteOne<Staff>("staff", { staffId: params.staffId })
-
-    if (!deleted) {
+    const staff = await tenantDb.findOne<Staff>("staff", { staffId })
+    if (!staff) {
       return NextResponse.json(
         { error: "Staff member not found" },
         { status: 404 }
       )
     }
+
+    await tenantDb.deleteOne<Staff>("staff", { staffId })
+
+    // Remove their stored face so it can no longer be matched
+    await deleteFace(staff.faceData, context.tenantId, staffId)
 
     return NextResponse.json({
       success: true,

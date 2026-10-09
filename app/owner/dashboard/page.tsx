@@ -5,31 +5,17 @@ import { StatCard } from "@/components/owner/shared/StatCard"
 import {
   Building2,
   Users,
-  CreditCard,
-  DollarSign,
-  TrendingUp,
+  UserCheck,
   CheckCircle2,
   XCircle,
 } from "lucide-react"
-import {
-  DashboardStats,
-  RevenueData,
-  OrgGrowthData,
-  SubscriptionData,
-  PaymentRateData,
-} from "@/lib/types/super-admin"
+import { DashboardStats, OrgGrowthData } from "@/lib/types/super-admin"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { RevenueChart } from "@/components/owner/dashboard/RevenueChart"
 import { OrgGrowthChart } from "@/components/owner/dashboard/OrgGrowthChart"
-import { SubscriptionPieChart } from "@/components/owner/dashboard/SubscriptionPieChart"
-import { PaymentDonutChart } from "@/components/owner/dashboard/PaymentDonutChart"
 
 export default function OwnerDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [revenueData, setRevenueData] = useState<RevenueData[]>([])
   const [orgGrowthData, setOrgGrowthData] = useState<OrgGrowthData[]>([])
-  const [subscriptionData, setSubscriptionData] = useState<SubscriptionData[]>([])
-  const [paymentRateData, setPaymentRateData] = useState<PaymentRateData | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartsLoading, setChartsLoading] = useState(true)
 
@@ -64,26 +50,11 @@ export default function OwnerDashboardPage() {
         Authorization: `Bearer ${token}`,
       }
 
-      const [revenueRes, growthRes, distributionRes] = await Promise.all([
-        fetch("/api/owner/analytics/revenue?period=month", { headers }),
-        fetch("/api/owner/analytics/growth", { headers }),
-        fetch("/api/owner/analytics/distribution", { headers }),
-      ])
-
-      if (revenueRes.ok) {
-        const data = await revenueRes.json()
-        setRevenueData(data)
-      }
+      const growthRes = await fetch("/api/owner/analytics/growth", { headers })
 
       if (growthRes.ok) {
         const data = await growthRes.json()
         setOrgGrowthData(data)
-      }
-
-      if (distributionRes.ok) {
-        const data = await distributionRes.json()
-        setSubscriptionData(data.subscriptionDistribution)
-        setPaymentRateData(data.paymentSuccessRate)
       }
     } catch (error) {
       console.error("Failed to fetch chart data:", error)
@@ -121,32 +92,12 @@ export default function OwnerDashboardPage() {
           description="Users actively using system"
         />
         <StatCard
-          title="Active Subscriptions"
-          value={stats?.totalActiveSubscriptions || 0}
-          icon={CreditCard}
+          title="Active Staff"
+          value={stats?.totalStaff || 0}
+          icon={UserCheck}
           loading={loading}
           iconColor="text-purple-600"
-          description="Paying organizations"
-        />
-        <StatCard
-          title="Total Revenue"
-          value={`₦${stats?.totalRevenue.toLocaleString() || 0}`}
-          icon={DollarSign}
-          loading={loading}
-          iconColor="text-emerald-600"
-          description="Lifetime revenue"
-        />
-      </div>
-
-      {/* Secondary stats */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Monthly Recurring Revenue"
-          value={`₦${stats?.mrr.toLocaleString() || 0}`}
-          icon={TrendingUp}
-          loading={loading}
-          iconColor="text-indigo-600"
-          description="Expected monthly income"
+          description="Staff across all organizations"
         />
         <StatCard
           title="Active Tenants"
@@ -167,16 +118,7 @@ export default function OwnerDashboardPage() {
       </div>
 
       {/* Charts section */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <RevenueChart data={revenueData} loading={chartsLoading} />
-        <OrgGrowthChart data={orgGrowthData} loading={chartsLoading} />
-      </div>
-
-      {/* Additional charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SubscriptionPieChart data={subscriptionData} loading={chartsLoading} />
-        <PaymentDonutChart data={paymentRateData} loading={chartsLoading} />
-      </div>
+      <OrgGrowthChart data={orgGrowthData} loading={chartsLoading} />
 
       {/* Additional metrics */}
       <Card>

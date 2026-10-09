@@ -1,56 +1,23 @@
 /**
- * Verify Staff API - Public endpoint for biometric registration
- * Requires tenantId to ensure staff belongs to the correct organization
+ * Verify Staff API - resolves a biometric enrollment token to the staff member
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
-import { Staff } from "@/lib/types"
+import { Staff, TenantError } from "@/lib/types"
+import { verifyEnrollmentToken } from "@/lib/auth/checkin-tokens"
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const staffId = searchParams.get("staffId")
-    const tenantId = searchParams.get("tenantId")
-
-    if (!staffId) {
-      return NextResponse.json(
-        { error: "Staff ID is required" },
-        { status: 400 }
-      )
-    }
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: "Organization context is required" },
-        { status: 400 }
-      )
-    }
+    const token = new URL(request.url).searchParams.get("token")
+    const { tenantId, staffId } = verifyEnrollmentToken(token)
 
     const db = await getDatabase()
-    
-    // Verify organization exists
-    const organization = await db.collection("organizations").findOne({
-      _id: new ObjectId(tenantId),
-    })
-
-    if (!organization) {
-      return NextResponse.json(
-        { error: "Organization not found" },
-        { status: 404 }
-      )
-    }
-
-    // Find staff member in this specific organization
     const tenantDb = createTenantDatabase(db, tenantId)
-    const staff = await tenantDb.findOne<Staff>("staff", {
-      staffId: staffId.toUpperCase(),
-      isActive: true,
-    })
+    const staff = await tenantDb.findOne<Staff>("staff", { staffId, isActive: true })
 
     if (!staff) {
       return NextResponse.json(
@@ -65,15 +32,17 @@ export async function GET(request: NextRequest) {
         staffId: staff.staffId,
         name: staff.name,
         department: staff.department,
-        hasFingerprintRegistered: staff.biometricCredentials && staff.biometricCredentials.length > 0,
         hasFaceRegistered: !!staff.faceData,
       },
     })
   } catch (error) {
+    if (error instanceof TenantError) {
+      return NextResponse.json(
+        { error: "This registration link is invalid or has expired. Ask your administrator for a new one." },
+        { status: error.statusCode }
+      )
+    }
     console.error("Verify staff error:", error)
-    return NextResponse.json(
-      { error: "Failed to verify staff" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to verify staff" }, { status: 500 })
   }
 }

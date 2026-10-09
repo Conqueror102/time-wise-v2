@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { AnalyticsError } from "@/components/analytics/analytics-error"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bar, Radar } from "react-chartjs-2"
 import {
@@ -22,31 +23,7 @@ interface DepartmentBreakdownProps {
 }
 
 export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchDepartmentData()
-  }, [timeRange])
-
-  const fetchDepartmentData = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch(`/api/analytics/departments?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const result = await response.json()
-      setData(result)
-    } catch (error) {
-      console.error("Failed to fetch department data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const { data, loading, error } = useAnalytics<any>("/api/analytics/departments", timeRange)
   if (loading) {
     return (
       <div className="space-y-6">
@@ -60,6 +37,10 @@ export function DepartmentBreakdown({ timeRange }: DepartmentBreakdownProps) {
         </Card>
       </div>
     )
+  }
+
+  if (error) {
+    return <AnalyticsError message={error} />
   }
 
   const attendanceByDept = {

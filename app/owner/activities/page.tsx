@@ -118,7 +118,6 @@ export default function ActivitiesPage() {
     const badges: Record<string, { label: string; variant: any }> = {
       organization_created: { label: "New Org", variant: "default" },
       user_created: { label: "New User", variant: "secondary" },
-      payment_success: { label: "Payment", variant: "default" },
       checkin: { label: "Check-in", variant: "secondary" },
     }
     const badge = badges[type] || { label: type, variant: "outline" }
@@ -173,7 +172,7 @@ export default function ActivitiesPage() {
       </div>
 
       {/* Activity stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -203,22 +202,6 @@ export default function ActivitiesPage() {
                 <p className="text-sm text-gray-600">New Users</p>
                 <p className="text-2xl font-bold">
                   {activities.filter((a) => a.type === "user_created").length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-full bg-emerald-100 p-3">
-                <DollarSign className="h-6 w-6 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Payments</p>
-                <p className="text-2xl font-bold">
-                  {activities.filter((a) => a.type === "payment_success").length}
                 </p>
               </div>
             </div>

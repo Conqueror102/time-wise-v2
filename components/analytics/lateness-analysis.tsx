@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { AnalyticsError } from "@/components/analytics/analytics-error"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Doughnut, Bar } from "react-chartjs-2"
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js"
@@ -14,31 +15,7 @@ interface LatenessAnalysisProps {
 }
 
 export function LatenessAnalysis({ timeRange }: LatenessAnalysisProps) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchLatenessData()
-  }, [timeRange])
-
-  const fetchLatenessData = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch(`/api/analytics/lateness?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const result = await response.json()
-      setData(result)
-    } catch (error) {
-      console.error("Failed to fetch lateness data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const { data, loading, error } = useAnalytics<any>("/api/analytics/lateness", timeRange)
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -54,6 +31,10 @@ export function LatenessAnalysis({ timeRange }: LatenessAnalysisProps) {
         ))}
       </div>
     )
+  }
+
+  if (error) {
+    return <AnalyticsError message={error} />
   }
 
   const latenessDistribution = {

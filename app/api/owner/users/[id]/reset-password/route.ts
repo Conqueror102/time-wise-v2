@@ -1,3 +1,4 @@
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { withSuperAdminAuth } from "@/lib/auth/super-admin"
 import { UserManagementService } from "@/lib/services/user-management"
@@ -10,7 +11,7 @@ function generateRandomPassword(length: number = 12): string {
   const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
   let password = ""
   for (let i = 0; i < length; i++) {
-    password += charset.charAt(Math.floor(Math.random() * charset.length))
+    password += charset.charAt(crypto.randomInt(charset.length))
   }
   return password
 }
@@ -19,9 +20,10 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Authenticate super admin
     const context = await withSuperAdminAuth(request)
 
@@ -31,7 +33,7 @@ export async function POST(
     // Reset user password
     const userService = new UserManagementService()
     await userService.resetUserPassword(
-      params.id,
+      id,
       newPassword,
       context.userId,
       context.email,

@@ -22,7 +22,6 @@ const Footer: React.FC = () => {
             <h4 className="font-semibold text-slate-900 mb-4">Product</h4>
             <ul className="space-y-2 text-sm text-slate-600">
               <li><a href="#features" className="hover:text-blue-600 transition-colors">Features</a></li>
-              <li><a href="#pricing" className="hover:text-blue-600 transition-colors">Pricing</a></li>
               <li><a href="#how-it-works" className="hover:text-blue-600 transition-colors">How It Works</a></li>
             </ul>
           </div>

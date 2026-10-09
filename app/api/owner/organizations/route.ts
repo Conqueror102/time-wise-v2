@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const perPage = parseInt(searchParams.get("perPage") || "50")
     const search = searchParams.get("search") || ""
     const status = searchParams.get("status") || ""
-    const subscriptionTier = searchParams.get("subscriptionTier") || ""
 
     // Get organizations
     const orgService = new OrganizationService()
@@ -26,7 +25,6 @@ export async function GET(request: NextRequest) {
       perPage,
       search,
       status,
-      subscriptionTier,
     })
 
     // Log action
@@ -35,7 +33,7 @@ export async function GET(request: NextRequest) {
       actorId: context.userId,
       actorEmail: context.email,
       action: "VIEW_ORGANIZATIONS",
-      metadata: { page, search, status, subscriptionTier },
+      metadata: { page, search, status },
       ipAddress: getIpAddress(request),
       userAgent: getUserAgent(request),
     })

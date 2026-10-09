@@ -7,158 +7,126 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Camera, CheckCircle, AlertTriangle, X, User } from "lucide-react"
 
 interface FaceRecognitionProps {
-  onScan: (faceData: string) => void
+  /** Called with the recognized staff ID and, when authenticating, the server's biometric proof */
+  onScan: (staffId: string, biometricProof?: string) => void
   onClose?: () => void
   mode: "register" | "authenticate"
   staffId?: string
+  /** Required in register mode */
+  enrollToken?: string
+  /** Required in authenticate mode */
+  checkInToken?: string
 }
 
-export function FaceRecognition({ onScan, onClose, mode, staffId }: FaceRecognitionProps) {
+export function FaceRecognition({ onScan, onClose, mode, staffId, enrollToken, checkInToken }: FaceRecognitionProps) {
   const [isScanning, setIsScanning] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string>("")
   const [success, setSuccess] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // The <video> element only exists while scanning, so attach the stream once both are ready
+  useEffect(() => {
+    const video = videoRef.current
+    if (video && stream && video.srcObject !== stream) {
+      video.srcObject = stream
+      video.play().catch(() => {
+        // autoplay can be interrupted if the camera is stopped quickly; nothing to do
+      })
+    }
+  }, [stream, isScanning])
+
+  // Release the camera when the stream is replaced or the component unmounts
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
+      stream?.getTracks().forEach((track) => track.stop())
     }
   }, [stream])
 
   const startCamera = async () => {
+    setError("")
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("This browser cannot access the camera. Use Chrome, Edge, Firefox or Safari over http://localhost or HTTPS.")
+      return
+    }
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: "user",
-          // Request better lighting conditions
-          advanced: [
-            { exposureMode: "continuous" },
-            { whiteBalanceMode: "continuous" },
-            { focusMode: "continuous" }
-          ]
         },
       })
-
       setStream(mediaStream)
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream
-      }
       setIsScanning(true)
-      setError("")
     } catch (err: any) {
-      setError("Camera access denied. Please allow camera permissions.")
       console.error("Camera error:", err)
-    }
-  }
-
-  const captureImage = async () => {
-    if (!videoRef.current || !canvasRef.current) return
-
-    const canvas = canvasRef.current
-    const video = videoRef.current
-    const context = canvas.getContext("2d")
-
-    if (!context) return
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    
-    // Draw the video frame
-    context.drawImage(video, 0, 0)
-
-    // Enhance brightness and contrast
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-    const data = imageData.data
-    
-    // Adjust brightness and contrast
-    const brightness = 20 // Increase brightness
-    const contrast = 30   // Increase contrast
-    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
-    
-    for (let i = 0; i < data.length; i += 4) {
-      // Apply brightness and contrast to RGB channels
-      data[i] = factor * (data[i] - 128) + 128 + brightness     // Red
-      data[i + 1] = factor * (data[i + 1] - 128) + 128 + brightness // Green
-      data[i + 2] = factor * (data[i + 2] - 128) + 128 + brightness // Blue
-      // Alpha channel (data[i + 3]) remains unchanged
-    }
-    
-    // Put the enhanced image back
-    context.putImageData(imageData, 0, 0)
-
-    // Convert to base64
-    const enhancedImageData = canvas.toDataURL("image/jpeg", 0.9)
-    const faceImage = enhancedImageData.split(",")[1] // Remove data:image/jpeg;base64, prefix
-
-    try {
-      if (mode === "register") {
-        // Register face
-        const response = await fetch("/api/biometric/face/register", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            staffId,
-            faceImage,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error("Failed to register face")
-        }
-
-        setSuccess(true)
-        setTimeout(() => {
-          onScan(staffId || "")
-        }, 1000)
-      } else {
-        // Authenticate face
-        const response = await fetch("/api/biometric/face/authenticate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            faceImage,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error("Face not recognized")
-        }
-
-        const data = await response.json()
-        
-        setSuccess(true)
-        setTimeout(() => {
-          onScan(data.staffId)
-        }, 1000)
-      }
-    } catch (err: any) {
-      setError(err.message || "Face recognition failed")
-      setSuccess(false)
-    } finally {
-      // Stop camera
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-        setStream(null)
-      }
+      setError(
+        err?.name === "NotAllowedError"
+          ? "Camera access was blocked. Allow camera access for this site in your browser settings, then try again."
+          : err?.name === "NotFoundError"
+            ? "No camera was found on this device."
+            : err?.name === "NotReadableError"
+              ? "The camera is in use by another app. Close it and try again."
+              : "Could not start the camera."
+      )
     }
   }
 
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop())
-      setStream(null)
-    }
+    setStream(null)
     setIsScanning(false)
+  }
+
+  const captureImage = async () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (!video || !canvas || !context) return
+
+    // The first frames arrive a moment after the camera starts
+    if (!video.videoWidth || !video.videoHeight) {
+      setError("The camera is still starting. Wait a second and try again.")
+      return
+    }
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    context.drawImage(video, 0, 0)
+
+    // Send the unmodified frame; brightness/contrast changes reduce recognition accuracy
+    const faceImage = canvas.toDataURL("image/jpeg", 0.9).split(",")[1] // strip the data: prefix
+
+    setProcessing(true)
+    setError("")
+    try {
+      const response = await fetch(mode === "register" ? "/api/biometric/face/register" : "/api/biometric/face/authenticate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(mode === "authenticate" ? { "x-checkin-token": checkInToken || "" } : {}),
+        },
+        body: JSON.stringify(mode === "register" ? { enrollToken, faceImage } : { faceImage }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || (mode === "register" ? "Failed to register face" : "Face not recognized"))
+      }
+
+      // Only switch the camera off once it worked; on failure it stays on so the person can retry
+      stopCamera()
+      setSuccess(true)
+      setTimeout(() => {
+        if (mode === "register") onScan(staffId || "")
+        else onScan(data.staffId, data.biometricProof)
+      }, 1000)
+    } catch (err: any) {
+      setError(err.message || "Face recognition failed")
+    } finally {
+      setProcessing(false)
+    }
   }
 
   return (
@@ -196,13 +164,13 @@ export function FaceRecognition({ onScan, onClose, mode, staffId }: FaceRecognit
                 <CheckCircle className="w-12 h-12 text-green-600" />
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative w-full max-w-sm mx-auto">
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-48 h-36 mx-auto bg-black rounded-lg object-cover"
+                  className="w-full max-w-sm aspect-[4/3] mx-auto bg-black rounded-lg object-cover -scale-x-100"
                 />
                 <div className="absolute inset-0 border-2 border-blue-500 rounded-lg pointer-events-none">
                   <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-blue-500"></div>
@@ -248,11 +216,12 @@ export function FaceRecognition({ onScan, onClose, mode, staffId }: FaceRecognit
               <>
                 <Button
                   onClick={captureImage}
+                  disabled={processing}
                   className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
                 >
-                  Capture
+                  {processing ? (mode === "register" ? "Registering..." : "Checking...") : "Capture"}
                 </Button>
-                <Button variant="outline" onClick={stopCamera} className="flex-1">
+                <Button variant="outline" onClick={stopCamera} disabled={processing} className="flex-1">
                   Cancel
                 </Button>
               </>

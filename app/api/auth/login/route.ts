@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
-import { comparePassword, generateAccessToken } from "@/lib/auth"
+import { comparePassword, generateAccessToken, toPublicUser } from "@/lib/auth"
 import { LoginRequest, User, Organization, TenantError, ErrorCodes } from "@/lib/types"
 import { ObjectId } from "mongodb"
 import { withErrorHandler } from "@/lib/middleware/error-handler"
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
   // Apply rate limiting
-  const rateLimitResponse = applyRateLimit(request, RateLimitPresets.AUTH_LOGIN)
+  const rateLimitResponse = await applyRateLimit(request, RateLimitPresets.AUTH_LOGIN)
   if (rateLimitResponse) return rateLimitResponse
   try {
     const body: LoginRequest = await request.json()
@@ -119,13 +119,10 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     // Update last login
     await db.collection("users").updateOne({ _id: user._id }, { $set: { lastLogin: new Date() } });
 
-    // Return success (without password)
-    const { password: _, ...userWithoutPassword } = user;
-
     return NextResponse.json({
       success: true,
       accessToken,
-      user: { ...userWithoutPassword, _id: user._id!.toString() },
+      user: toPublicUser(user),
       organization: { ...organization, _id: organization._id!.toString() },
     })
 

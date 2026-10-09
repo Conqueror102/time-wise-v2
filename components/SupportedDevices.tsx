@@ -48,27 +48,27 @@ const SupportedDevices: React.FC = () => {
 
   const biometrics = [
     {
-      name: "Face ID",
-      platform: "Apple Devices",
+      name: "Face Recognition",
+      platform: "Any device with a camera",
       icon: <ScanFace className="w-6 h-6" />,
       status: "Supported"
     },
     {
-      name: "Touch ID",
-      platform: "Mac & iOS",
+      name: "ZKTeco Terminals",
+      platform: "Fingerprint (ADMS / cloud server)",
       icon: <Fingerprint className="w-6 h-6" />,
       status: "Supported"
     },
     {
-      name: "Windows Hello",
-      platform: "Windows 10/11",
+      name: "Other Fingerprint Devices",
+      platform: "Via HTTP API",
+      icon: <Fingerprint className="w-6 h-6" />,
+      status: "Supported"
+    },
+    {
+      name: "QR Codes",
+      platform: "Printed badge or phone",
       icon: <ScanFace className="w-6 h-6" />,
-      status: "Supported"
-    },
-    {
-      name: "Android Biometrics",
-      platform: "Android Devices",
-      icon: <Fingerprint className="w-6 h-6" />,
       status: "Supported"
     }
   ];
@@ -183,7 +183,7 @@ const SupportedDevices: React.FC = () => {
                </div>
                <div>
                  <h4 className="font-bold text-slate-900">Privacy First</h4>
-                 <p className="text-sm text-slate-600">Biometric data stays on the device. We never store actual fingerprints or face data.</p>
+                 <p className="text-sm text-slate-600">Fingerprints never leave the fingerprint device. Face data is kept on your own server and never shared.</p>
                </div>
             </div>
           </motion.div>

@@ -38,11 +38,8 @@ export interface Organization {
   subdomain: string
   adminEmail: string
   status: OrganizationStatus
-  subscriptionTier: "starter" | "professional" | "enterprise"
-  subscriptionStatus: "active" | "trial" | "cancelled"
   createdAt: Date
   updatedAt?: Date
-  trialEndsAt?: Date
   settings?: OrganizationSettings
   allowedMethods?: AuthMethod[]
 }
@@ -67,12 +64,18 @@ export interface OrganizationSettings {
   workStartTime: string // Format: "HH:MM"
   workEndTime: string // Format: "HH:MM"
   earlyDepartureTime?: string // Format: "HH:MM"
-  maxStaff: number
+  maxStaff?: number // legacy, no longer enforced
   allowedMethods: AuthMethod[]
   timezone: string
   checkInPasscode?: string
   capturePhotos?: boolean // Toggle for automatic photo capture
+  verifyFaceOnIdCheckIn?: boolean // Match the photo against the registered face on QR / Staff ID check-ins
   photoRetentionDays?: number // Days to keep photos (default 7)
+  enabledCheckInMethods?: {
+    qrCode: boolean
+    manualEntry: boolean
+    faceRecognition: boolean
+  }
 }
 
 // ============================================
@@ -80,8 +83,12 @@ export interface OrganizationSettings {
 // ============================================
 
 export interface BiometricCredential {
+  /** 2 = verified server-side (base64url id + COSE public key); older entries are untrusted */
+  version?: number
   credentialId: string
   publicKey: string
+  counter?: number
+  transports?: string[]
   deviceName?: string
   registeredAt: Date
   lastUsed?: Date
@@ -89,6 +96,8 @@ export interface BiometricCredential {
 
 export interface FaceData {
   faceId: string
+  /** Which service holds the face; older records without it are Rekognition */
+  provider?: "compreface" | "rekognition"
   faceEmbedding?: string // For AI-based recognition
   faceImage?: string // Base64 image (fallback)
   registeredAt: Date
@@ -179,6 +188,7 @@ export interface RegisterOrganizationRequest {
   adminPassword: string
   firstName: string
   lastName: string
+  timezone?: string // IANA timezone, e.g. "Africa/Lagos"
 }
 
 export interface RegisterOrganizationResponse {

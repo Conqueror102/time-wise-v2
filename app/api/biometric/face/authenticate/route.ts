@@ -1,78 +1,53 @@
 /**
- * Authenticate with Face Recognition API
+ * Authenticate with Face Recognition API (kiosk)
+ * Requires the kiosk token; only faces registered to that tenant can match.
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
-import { Staff } from "@/lib/types"
+import { Staff, TenantError } from "@/lib/types"
+import { signBiometricProof, verifyKioskRequest } from "@/lib/auth/checkin-tokens"
+import { searchFace } from "@/lib/services/face-recognition"
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const { faceImage, faceEmbedding, tenantId } = await request.json()
+    const { tenantId } = verifyKioskRequest(request)
+    const { faceImage } = await request.json()
 
-    if (!faceImage && !faceEmbedding) {
+    if (!faceImage || typeof faceImage !== "string") {
+      return NextResponse.json({ error: "Face image is required" }, { status: 400 })
+    }
+
+    const faceResult = await searchFace(faceImage, tenantId)
+
+    if (!faceResult.success || !faceResult.staffId) {
+      // NO_FACE: nobody in view; NOT_RECOGNIZED: a face that isn't enrolled here;
+      // SERVICE_ERROR: the recognition service failed
+      const code = faceResult.noFace ? "NO_FACE" : faceResult.faceWidthRatio !== undefined ? "NOT_RECOGNIZED" : "SERVICE_ERROR"
       return NextResponse.json(
-        { error: "Face data is required" },
-        { status: 400 }
+        { error: faceResult.error || "Face not recognized", code, faceWidthRatio: faceResult.faceWidthRatio },
+        { status: code === "SERVICE_ERROR" ? 503 : code === "NO_FACE" ? 422 : 404 }
       )
     }
 
     const db = await getDatabase()
-    
-    // Search face using AWS Rekognition
-    const { searchFace } = await import("@/lib/services/aws-rekognition")
-    const rekognitionResult = await searchFace(faceImage || faceEmbedding!)
-
-    if (!rekognitionResult.success || !rekognitionResult.staffId) {
-      return NextResponse.json(
-        { error: rekognitionResult.error || "Face not recognized" },
-        { status: 404 }
-      )
-    }
-
-    const matchedStaffId = rekognitionResult.staffId
-    
-    // Find staff member
-    let staff: any = null
-    let finalTenantId = tenantId
-    
-    if (tenantId) {
-      const tenantDb = createTenantDatabase(db, tenantId)
-      staff = await tenantDb.findOne<Staff>("staff", {
-        staffId: matchedStaffId,
-        isActive: true,
-      })
-    } else {
-      staff = await db.collection("staff").findOne({
-        staffId: matchedStaffId,
-        isActive: true,
-      })
-      
-      if (staff) {
-        finalTenantId = staff.tenantId
-      }
-    }
+    const tenantDb = createTenantDatabase(db, tenantId)
+    const staff = await tenantDb.findOne<Staff>("staff", {
+      staffId: faceResult.staffId,
+      isActive: true,
+    })
 
     if (!staff) {
-      return NextResponse.json(
-        { error: "Staff not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Staff not found" }, { status: 404 })
     }
 
-    // Update last used timestamp
-    const tenantDb = createTenantDatabase(db, finalTenantId)
     await tenantDb.updateOne<Staff>(
       "staff",
       { staffId: staff.staffId },
-      {
-        $set: { 
-          "faceData.lastUsed": new Date(),
-        },
-      }
+      { $set: { "faceData.lastUsed": new Date() } as any }
     )
 
     return NextResponse.json({
@@ -80,13 +55,14 @@ export async function POST(request: NextRequest) {
       staffId: staff.staffId,
       staffName: staff.name,
       department: staff.department,
-      tenantId: finalTenantId,
+      faceWidthRatio: faceResult.faceWidthRatio,
+      biometricProof: signBiometricProof(tenantId, staff.staffId, "face"),
     })
   } catch (error) {
+    if (error instanceof TenantError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
     console.error("Authenticate face error:", error)
-    return NextResponse.json(
-      { error: "Failed to authenticate face" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to authenticate face" }, { status: 500 })
   }
 }

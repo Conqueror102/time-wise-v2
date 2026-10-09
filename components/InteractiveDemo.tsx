@@ -91,7 +91,7 @@ const InteractiveDemo: React.FC = () => {
                   </div>
                   <div className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${screen === 'biometric_scan' ? 'bg-white/5' : 'opacity-50'}`}>
                     <div className="bg-blue-900/50 p-2 rounded text-blue-400 font-bold text-xs">3</div>
-                    <p className="text-sm text-gray-300">Biometric verification (FaceID)</p>
+                    <p className="text-sm text-gray-300">Biometric verification (face recognition)</p>
                   </div>
                   <div className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${screen === 'success' ? 'bg-white/5' : 'opacity-50'}`}>
                     <div className="bg-green-900/50 p-2 rounded text-green-400 font-bold text-xs">4</div>
@@ -346,7 +346,7 @@ const InteractiveDemo: React.FC = () => {
                           </div>
                           <div className="flex justify-between items-center">
                              <span className="opacity-80 text-sm">Verification</span>
-                             <span className="font-semibold flex items-center gap-1"><ScanFace className="w-3 h-3"/> FaceID</span>
+                             <span className="font-semibold flex items-center gap-1"><ScanFace className="w-3 h-3"/> Face</span>
                           </div>
                        </div>
 

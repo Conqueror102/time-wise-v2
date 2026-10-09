@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Building2,
   Users,
-  CreditCard,
   BarChart3,
   FileText,
   Settings,
@@ -38,11 +37,6 @@ const navigation = [
     icon: Users,
   },
   {
-    name: "Payments",
-    href: "/owner/payments",
-    icon: CreditCard,
-  },
-  {
     name: "Analytics",
     href: "/owner/analytics",
     icon: BarChart3,
@@ -61,11 +55,6 @@ const navigation = [
     name: "System Health",
     href: "/owner/health",
     icon: Activity,
-  },
-  {
-    name: "Settings",
-    href: "/owner/settings",
-    icon: Settings,
   },
 ]
 

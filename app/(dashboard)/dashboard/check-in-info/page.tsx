@@ -221,7 +221,7 @@ export default function CheckInInfoPage() {
               <span className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">
                 4
               </span>
-              <span>Choose check-in method: Manual, QR Code, Fingerprint, or Face</span>
+              <span>Choose check-in method: Manual, QR Code, or Face (fingerprints are recorded by fingerprint devices)</span>
             </li>
             <li className="flex gap-3">
               <span className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">

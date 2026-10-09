@@ -1,83 +1,92 @@
-# Staff Check-In System
+# TimeWise
 
-A comprehensive MERN stack application for managing staff attendance with QR code functionality.
+Free, multi-tenant staff attendance app. Organizations register, add staff, and staff check in and out at a kiosk using their staff ID, a QR code or hands-free face recognition — or on a fingerprint attendance device. Every feature is available to every organization.
 
-## Features
+## Documentation
 
-- 📝 Staff registration with unique ID generation
-- 📱 QR code generation and scanning
-- ⏰ Check-in/check-out with lateness detection
-- 📊 Admin dashboard with real-time monitoring
-- 📈 Attendance reports and CSV export
-- 🔍 Advanced filtering and search
+- **[Setup & Deployment Guide](docs/DEPLOYMENT.md)** — run locally, deploy to a server with HTTPS, email, face recognition, fingerprint devices, backups, troubleshooting
+- **[User Guide](docs/USER-GUIDE.md)** — for organization admins: settings, staff, the kiosk, check-in methods, reports
 
-## Setup Instructions
+## Quick start
 
-### 1. Install Dependencies
+```bash
+cp .env.example .env              # set JWT_SECRET (openssl rand -base64 32)
+docker compose up -d --build      # app on http://localhost:3000
+```
 
-\`\`\`bash
-npm install
-\`\`\`
+Face recognition (optional, 2.2 GB download):
 
-### 2. Environment Variables
+```bash
+docker compose --profile face up -d
+./scripts/setup-compreface.sh
+docker compose --profile face up -d app
+```
 
-Create a `.env.local` file in the root directory:
+Production with HTTPS on your domain: see [DEPLOYMENT.md §3](docs/DEPLOYMENT.md#3-deploy-to-a-server-recommended).
 
-\`\`\`env
-MONGODB_URI=mongodb://localhost:27017/staff_checkin
-\`\`\`
+## Stack
 
-For production, use MongoDB Atlas:
-\`\`\`env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/staff_checkin?retryWrites=true&w=majority
-\`\`\`
+- Next.js 16 (App Router, route handlers under `app/api`), React 19, Tailwind CSS 3, shadcn/ui
+- MongoDB (native driver). Every tenant-scoped query goes through `TenantDatabase` (`lib/database/tenant-db.ts`), which adds `tenantId` automatically.
+- CompreFace (self-hosted) or AWS Rekognition for faces; ZKTeco ADMS / HTTP for fingerprint devices; Nodemailer for email; photos in MongoDB or Cloudinary
+- Docker Compose for local and production (Caddy for HTTPS)
 
-### 3. Start MongoDB
+## Development
 
-Make sure MongoDB is running locally, or use MongoDB Atlas for cloud hosting.
+```bash
+pnpm install
+cp .env.example .env.local        # point MONGODB_URI at a running MongoDB
+pnpm dev
+```
 
-### 4. Run Development Server
+| Script | Purpose |
+| --- | --- |
+| `pnpm build` / `pnpm start` | Production build (type errors fail the build) |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm init:super-admin-db` | Create platform-owner collections and indexes |
+| `pnpm seed:super-admin` | Create the platform-owner account from `SUPER_ADMIN_SEED_*` |
+| `pnpm migrate:free-plan` | One-time: move old "trial" organizations to "active" and remove plan fields |
 
-\`\`\`bash
-npm run dev
-\`\`\`
+## Layout
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+```
+app/(public)/            marketing, login, register, password reset
+app/(dashboard)/         organization admin dashboard
+app/checkin/             check-in kiosk (manual, QR, hands-free face)
+app/register-biometric/  staff face enrollment (admin-issued link)
+app/owner/               platform-owner (super admin) panel
+app/api/                 route handlers
+app/iclock/              ZKTeco ADMS endpoints for fingerprint devices
+lib/auth/                JWT, password hashing, super-admin auth, kiosk/enrollment/photo tokens
+lib/analytics/           shared date-range and attendance helpers for analytics
+lib/checkin/             check-in policy (timezone, lateness, enabled methods)
+lib/devices/             fingerprint devices: registration, punches, ZKTeco protocol
+lib/services/            face recognition, photo storage, email, owner analytics, audit
+deploy/                  Caddyfile for production HTTPS
+docs/                    setup and user guides (older notes in docs/archive/)
+```
 
-### 5. Build for Production
+## Authentication model
 
-\`\`\`bash
-npm run build
-npm start
-\`\`\`
+| Caller | Credential | Issued by |
+| --- | --- | --- |
+| Org admin / manager | `Authorization: Bearer <jwt>` (24h) | `/api/auth/login` |
+| Platform owner | `Authorization: Bearer <jwt>` (role `super_admin`) | `/api/owner/auth/login` |
+| Check-in kiosk | `x-checkin-token` header (12h) | `/api/organization/verify-passcode` |
+| Face enrollment | `token` in the registration link (24h, one staff member) | `POST /api/staff/[staffId]/enrollment` |
+| Face check-in | `biometricProofs` in the check-in body (2 min) | `/api/biometric/face/authenticate` |
+| Stored photo | `token` query parameter (1h) | attendance/history APIs |
+| HTTP fingerprint device | `Authorization: Bearer <device token>` | Settings → Fingerprint Devices |
+| ZKTeco device | serial number registered in Settings | Settings → Fingerprint Devices |
 
-## Usage
+The check-in API takes the tenant from the kiosk token, never from the request body, and face check-ins require a proof issued for the same staff member. Every admin request re-checks that the user and organization are still active, so suspending an account takes effect immediately.
 
-1. **Register Staff**: Use the "Register Staff" tab to add new employees
-2. **Check-In/Out**: Staff can use their ID or scan QR codes
-3. **Admin Dashboard**: Monitor attendance, view reports, and manage settings
+## Timezones
 
-## Technology Stack
+Each organization has a `settings.timezone` (IANA name, set from the admin's browser at registration and editable in Settings). Lateness, early departure, "today" and fingerprint-device clock times are computed in that timezone.
 
-- **Frontend**: Next.js 14, React, TailwindCSS, shadcn/ui
-- **Backend**: Next.js API Routes
-- **Database**: MongoDB
-- **QR Codes**: qrcode, html5-qrcode
+## Notes
 
-## Database Collections
-
-The system automatically creates these MongoDB collections:
-
-- `staff` - Staff member information
-- `attendance` - Check-in/out logs
-- `settings` - Admin configuration
-
-## API Endpoints
-
-- `POST /api/staff/register` - Register new staff
-- `GET /api/staff/[staffId]` - Get staff details
-- `POST /api/attendance/checkin` - Check-in/out
-- `GET /api/admin/logs` - Get attendance logs
-- `GET /api/admin/current-staff` - Get currently clocked in staff
-- `GET /api/admin/absent-staff` - Get absent staff
-- `GET/POST /api/admin/settings` - Manage admin settings
+- Rate limits are stored in the `rate_limits` collection (TTL-indexed), so they hold across instances.
+- Check-in photos stored locally (`attendance_photos`) expire after 7 days via a TTL index; `/api/cron/cleanup-photos` (protected by `CRON_SECRET`) also removes Cloudinary photos.
+- Faces registered before face matching was scoped per organization must be registered again.

@@ -63,7 +63,7 @@ export default function AboutPage() {
           {/* CTA */}
           <div className="text-center bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white">
             <h2 className="text-2xl font-bold mb-4">Ready to Transform Your Attendance Tracking?</h2>
-            <p className="mb-6 text-blue-100">Start your 14-day free trial today. No credit card required.</p>
+            <p className="mb-6 text-blue-100">TimeWise is completely free. Set up your organization in minutes.</p>
             <a
               href="/register"
               className="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-blue-600 bg-white rounded-full hover:bg-gray-50 transition-all shadow-lg"

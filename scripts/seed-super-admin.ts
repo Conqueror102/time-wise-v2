@@ -101,13 +101,6 @@ async function seedSuperAdmin() {
     await auditLogsCollection.createIndex({ tenantId: 1, timestamp: -1 })
     console.log("   ✓ Created index on system_audit_logs.tenantId + timestamp")
 
-    // Paystack webhooks collection indexes
-    const webhooksCollection = db.collection("paystack_webhooks")
-    await webhooksCollection.createIndex({ timestamp: -1 })
-    console.log("   ✓ Created index on paystack_webhooks.timestamp")
-    await webhooksCollection.createIndex({ tenantId: 1, timestamp: -1 })
-    console.log("   ✓ Created index on paystack_webhooks.tenantId + timestamp")
-
     // Platform stats cache collection with TTL index
     const statsCollection = db.collection("platform_stats_cache")
     await statsCollection.createIndex(

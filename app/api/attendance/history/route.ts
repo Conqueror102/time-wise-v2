@@ -4,10 +4,12 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { getOrganizationToday } from "@/lib/checkin/policy"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { AttendanceLog, TenantError } from "@/lib/types"
-import { hasFeatureAccess } from "@/lib/features/feature-access"
+import { getCheckInTime, getCheckOutTime } from "@/lib/analytics/range"
+import { photoUrl } from "@/lib/services/photo-storage"
 
 export const dynamic = 'force-dynamic'
 
@@ -16,20 +18,6 @@ export async function GET(request: NextRequest) {
     const context = await withAuth(request, {
       allowedRoles: ["org_admin", "manager"],
     })
-
-    // Check if user has access to history
-    const canAccessHistory = await hasFeatureAccess(
-      context.tenantId,
-      "canAccessHistory",
-      process.env.NODE_ENV === "development"
-    )
-
-    if (!canAccessHistory) {
-      return NextResponse.json(
-        { error: "This feature requires a paid subscription plan" },
-        { status: 403 }
-      )
-    }
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
@@ -40,73 +28,76 @@ export async function GET(request: NextRequest) {
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Build query for check-ins
-    const checkInQuery: any = { type: "check-in" }
-    
+    const today = await getOrganizationToday(db, context.tenantId)
+
+    const query: any = {}
     if (date) {
-      // Single date query
-      checkInQuery.date = date
+      query.date = date
     } else if (startDate && endDate) {
-      // Date range query
-      checkInQuery.date = { $gte: startDate, $lte: endDate }
+      query.date = { $gte: startDate, $lte: endDate }
     } else {
-      // Default to today
-      checkInQuery.date = new Date().toISOString().split("T")[0]
+      query.date = today
     }
 
     if (staffId) {
-      checkInQuery.staffId = staffId
+      query.staffId = staffId
     }
 
-    // Get check-ins
-    const checkIns = await tenantDb.find<AttendanceLog>("attendance", checkInQuery)
+    const records = await tenantDb.find<AttendanceLog>("attendance", query)
 
-    // Build query for check-outs
-    const checkOutQuery: any = { type: "check-out" }
-    if (date) {
-      checkOutQuery.date = date
-    } else if (startDate && endDate) {
-      checkOutQuery.date = { $gte: startDate, $lte: endDate }
-    } else {
-      checkOutQuery.date = new Date().toISOString().split("T")[0]
+    // Current records hold both check-in and check-out on one document (whose
+    // type becomes "check-out" after checking out). Older data stored separate
+    // documents per event, so merge by staff and date.
+    type HistoryEntry = {
+      staffId: string
+      staffName: string
+      department: string
+      checkInTime?: Date
+      checkOutTime?: Date
+      isLate: boolean
+      isEarly: boolean
+      date: string
+      checkInMethod?: string
+      checkOutMethod?: string
+      checkInPhoto?: string
+      checkOutPhoto?: string
     }
+    const byStaffAndDate = new Map<string, HistoryEntry>()
 
-    if (staffId) {
-      checkOutQuery.staffId = staffId
-    }
-
-    const checkOuts = await tenantDb.find<AttendanceLog>("attendance", checkOutQuery)
-
-    // Create a map of check-outs by staffId and date
-    const checkOutMap = new Map<string, string>()
-    checkOuts.forEach((log) => {
+    for (const log of records) {
       const key = `${log.staffId}-${log.date}`
-      checkOutMap.set(key, log.timestamp)
-    })
-
-    // Create a map for early departures
-    const earlyDepartureMap = new Map<string, boolean>()
-    checkOuts.forEach((log) => {
-      const key = `${log.staffId}-${log.date}`
-      if (log.isEarly) {
-        earlyDepartureMap.set(key, true)
+      const entry: HistoryEntry = byStaffAndDate.get(key) || {
+        staffId: log.staffId,
+        staffName: log.staffName,
+        department: log.department,
+        isLate: false,
+        isEarly: false,
+        date: log.date,
       }
-    })
 
-    // Combine check-in and check-out data
-    const attendance = checkIns.map((log) => ({
-      staffId: log.staffId,
-      staffName: log.staffName,
-      department: log.department,
-      checkInTime: log.timestamp,
-      checkOutTime: checkOutMap.get(`${log.staffId}-${log.date}`),
-      isLate: log.isLate,
-      isEarly: earlyDepartureMap.get(`${log.staffId}-${log.date}`) || false,
-      date: log.date,
-    }))
+      const checkInTime = getCheckInTime(log)
+      const checkOutTime = getCheckOutTime(log)
 
-    // Sort by date descending
-    attendance.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      if (checkInTime && !entry.checkInTime) {
+        entry.checkInTime = checkInTime
+        entry.checkInMethod = log.checkInMethod || log.method
+        entry.checkInPhoto = photoUrl(log.checkInPhoto, context.tenantId, log.photosCapturedAt)
+      }
+      if (checkOutTime) {
+        entry.checkOutTime = checkOutTime
+        entry.checkOutMethod = log.checkOutMethod || log.method
+        entry.checkOutPhoto = photoUrl(log.checkOutPhoto, context.tenantId, log.photosCapturedAt)
+      }
+      entry.isLate = entry.isLate || !!log.isLate
+      entry.isEarly = entry.isEarly || !!log.isEarly
+
+      byStaffAndDate.set(key, entry)
+    }
+
+    const attendance = Array.from(byStaffAndDate.values()).filter((entry) => entry.checkInTime)
+
+    // Newest first
+    attendance.sort((a, b) => b.date.localeCompare(a.date) || b.checkInTime!.getTime() - a.checkInTime!.getTime())
 
     return NextResponse.json({
       success: true,

@@ -20,10 +20,8 @@ interface Organization {
   name: string
   subdomain: string
   adminEmail: string
-  subscriptionTier: string
   status: string
   createdAt: string
-  trialEnds?: string
 }
 
 export default function OrganizationsPage() {
@@ -78,21 +76,6 @@ export default function OrganizationsPage() {
     )
   }
 
-  const getPlanBadge = (tier: string) => {
-    const colors: Record<string, string> = {
-      free: "bg-gray-100 text-gray-800",
-      basic: "bg-blue-100 text-blue-800",
-      pro: "bg-purple-100 text-purple-800",
-      enterprise: "bg-orange-100 text-orange-800",
-    }
-
-    return (
-      <Badge className={colors[tier] || "bg-gray-100 text-gray-800"}>
-        {tier.toUpperCase()}
-      </Badge>
-    )
-  }
-
   const columns: Column<Organization>[] = [
     {
       header: "Organization",
@@ -109,10 +92,6 @@ export default function OrganizationsPage() {
       cell: (row) => (
         <span className="text-sm text-gray-700">{row.adminEmail}</span>
       ),
-    },
-    {
-      header: "Plan",
-      cell: (row) => getPlanBadge(row.subscriptionTier),
     },
     {
       header: "Status",
@@ -139,9 +118,6 @@ export default function OrganizationsPage() {
             <DropdownMenuItem onClick={() => router.push(`/owner/organizations/${row._id}`)}>
               View Details
             </DropdownMenuItem>
-            <DropdownMenuItem>Suspend</DropdownMenuItem>
-            <DropdownMenuItem>Edit Plan</DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),

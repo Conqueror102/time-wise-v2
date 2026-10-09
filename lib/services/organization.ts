@@ -1,6 +1,7 @@
 // Organization Service - Handles organization/tenant management for super admin
 
 import { getDatabase } from "@/lib/mongodb"
+import { toPublicUser } from "@/lib/auth/public-user"
 import {
   OrgFilters,
   PaginatedOrganizations,
@@ -57,9 +58,6 @@ export class OrganizationService {
       query.status = filters.status
     }
 
-    if (filters.subscriptionTier) {
-      query.subscriptionTier = filters.subscriptionTier
-    }
 
     // Pagination
     const page = filters.page || 1
@@ -119,14 +117,6 @@ export class OrganizationService {
       .sort({ createdAt: -1 })
       .toArray()
 
-    // Get recent payments from webhook logs
-    const webhooks = db.collection("paystack_webhooks")
-    const recentPayments = await webhooks
-      .find({ tenantId: orgId })
-      .sort({ timestamp: -1 })
-      .limit(10)
-      .toArray()
-
     // Get analytics
     const analytics = await this.getOrganizationAnalytics(orgId)
 
@@ -135,8 +125,7 @@ export class OrganizationService {
 
     return {
       organization,
-      users: orgUsers,
-      recentPayments,
+      users: orgUsers.map(toPublicUser),
       analytics,
       auditLogs,
     }
@@ -267,15 +256,6 @@ export class OrganizationService {
       )
     }
 
-    // Check if org has active subscription
-    if (org.subscriptionStatus === "active" && !hardDelete) {
-      throw new SuperAdminError(
-        "Cannot delete organization with active subscription. Suspend first or use hard delete.",
-        SuperAdminErrorCodes.CANNOT_DELETE_ACTIVE_ORG,
-        400
-      )
-    }
-
     if (hardDelete) {
       // Hard delete - remove from database
       await organizations.deleteOne({ _id: new ObjectId(orgId) })
@@ -289,7 +269,6 @@ export class OrganizationService {
         {
           $set: {
             status: "cancelled",
-            subscriptionStatus: "cancelled",
             updatedAt: new Date(),
           },
         }
@@ -313,82 +292,14 @@ export class OrganizationService {
   }
 
   /**
-   * Update organization subscription plan
-   */
-  async updateSubscriptionPlan(
-    orgId: string,
-    newPlan: string,
-    actorId: string,
-    actorEmail: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    const db = await getDatabase()
-    const organizations = db.collection("organizations")
-
-    // Validate organization exists
-    const org = await organizations.findOne({ _id: new ObjectId(orgId) })
-
-    if (!org) {
-      throw new SuperAdminError(
-        "Organization not found",
-        SuperAdminErrorCodes.ORGANIZATION_NOT_FOUND,
-        404
-      )
-    }
-
-    const oldPlan = org.subscriptionTier
-    const action = this.isUpgrade(oldPlan, newPlan) ? "UPGRADE_PLAN" : "DOWNGRADE_PLAN"
-
-    // Update plan
-    await organizations.updateOne(
-      { _id: new ObjectId(orgId) },
-      {
-        $set: {
-          subscriptionTier: newPlan,
-          updatedAt: new Date(),
-        },
-      }
-    )
-
-    // Create audit log
-    await this.auditService.createLog({
-      actorId,
-      actorEmail,
-      tenantId: orgId,
-      action,
-      metadata: {
-        organizationName: org.name,
-        subdomain: org.subdomain,
-        oldPlan,
-        newPlan,
-      },
-      ipAddress,
-      userAgent,
-    })
-  }
-
-  /**
    * Get organization users
    */
   async getOrganizationUsers(orgId: string): Promise<any[]> {
     const db = await getDatabase()
     const users = db.collection("users")
 
-    return await users.find({ tenantId: orgId }).sort({ createdAt: -1 }).toArray()
-  }
-
-  /**
-   * Get organization payments
-   */
-  async getOrganizationPayments(orgId: string): Promise<any[]> {
-    const db = await getDatabase()
-    const webhooks = db.collection("paystack_webhooks")
-
-    return await webhooks
-      .find({ tenantId: orgId })
-      .sort({ timestamp: -1 })
-      .toArray()
+    const orgUsers = await users.find({ tenantId: orgId }).sort({ createdAt: -1 }).toArray()
+    return orgUsers.map(toPublicUser)
   }
 
   /**
@@ -396,12 +307,12 @@ export class OrganizationService {
    */
   async getOrganizationAnalytics(orgId: string): Promise<OrgAnalytics> {
     const db = await getDatabase()
-    const users = db.collection("users")
+    const staff = db.collection("staff")
     const attendance = db.collection("attendance")
 
     const [totalStaff, activeStaff, totalCheckins, lastCheckIn] = await Promise.all([
-      users.countDocuments({ tenantId: orgId, role: "staff" }),
-      users.countDocuments({ tenantId: orgId, role: "staff", isActive: true }),
+      staff.countDocuments({ tenantId: orgId }),
+      staff.countDocuments({ tenantId: orgId, isActive: true }),
       attendance.countDocuments({ tenantId: orgId }),
       attendance
         .findOne({ tenantId: orgId }, { sort: { checkInTime: -1 } })
@@ -419,15 +330,5 @@ export class OrganizationService {
       averageAttendanceRate,
       lastCheckIn,
     }
-  }
-
-  /**
-   * Helper: Determine if plan change is an upgrade
-   */
-  private isUpgrade(oldPlan: string, newPlan: string): boolean {
-    const planHierarchy = ["free", "basic", "pro", "enterprise"]
-    const oldIndex = planHierarchy.indexOf(oldPlan)
-    const newIndex = planHierarchy.indexOf(newPlan)
-    return newIndex > oldIndex
   }
 }

@@ -11,6 +11,19 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { getImageSrc } from "@/lib/utils/image"
+import { getZonedDateTime } from "@/lib/utils/date"
+import { toCsv, downloadCsv } from "@/lib/utils/csv"
+
+/** Today's date in the organization's timezone (falls back to the browser's) */
+function organizationToday(): string {
+  try {
+    const org = JSON.parse(localStorage.getItem("organization") || "{}")
+    const tz = org.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    return getZonedDateTime(new Date(), tz).date
+  } catch {
+    return new Date().toLocaleDateString("en-CA")
+  }
+}
 
 interface AttendanceLog {
   _id: string
@@ -27,6 +40,13 @@ interface AttendanceLog {
   checkInPhoto?: string
   checkOutPhoto?: string
   photosCapturedAt?: string
+  faceVerification?: "matched" | "not-registered" | "unavailable"
+}
+
+const FACE_VERIFICATION_LABELS = {
+  matched: { text: "Face verified", className: "bg-green-100 text-green-700" },
+  "not-registered": { text: "No face on file", className: "bg-gray-100 text-gray-600" },
+  unavailable: { text: "Face not checked", className: "bg-amber-100 text-amber-700" },
 }
 
 export default function AttendancePage() {
@@ -35,9 +55,7 @@ export default function AttendancePage() {
   const [originalLogs, setOriginalLogs] = useState<any[]>([]) // Store original data for stats
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  )
+  const [selectedDate, setSelectedDate] = useState(organizationToday)
   const [selectedPhoto, setSelectedPhoto] = useState<{
     photo: string
     staffName: string
@@ -72,10 +90,12 @@ export default function AttendancePage() {
   }, [selectedPhoto])
 
   const fetchLogs = async () => {
+    setLoading(true)
+    setError("")
     try {
       const token = localStorage.getItem("accessToken")
       const response = await fetch(
-        `/api/attendance?date=${selectedDate}&limit=100`,
+        `/api/attendance?date=${selectedDate}&limit=2000`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -96,6 +116,12 @@ export default function AttendancePage() {
       const expandedLogs: AttendanceLog[] = []
       
       data.logs.forEach((log: any) => {
+        // Older records store a single event per document in `timestamp`
+        if (!log.checkInTime && !log.checkOutTime) {
+          if (log.type === "check-out") log.checkOutTime = log.timestamp
+          else log.checkInTime = log.timestamp
+        }
+
         // Add check-in row if check-in exists
         if (log.checkInTime) {
           expandedLogs.push({
@@ -104,6 +130,7 @@ export default function AttendancePage() {
             type: "check-in",
             timestamp: log.checkInTime,
             method: log.checkInMethod || log.method,
+            faceVerification: log.checkInFaceVerification,
             checkOutPhoto: undefined, // Only show check-in photo
             // For check-in, show late status if applicable
             status: log.isLate ? "late" : "present",
@@ -119,6 +146,7 @@ export default function AttendancePage() {
             type: "check-out",
             timestamp: log.checkOutTime,
             method: log.checkOutMethod || log.method,
+            faceVerification: log.checkOutFaceVerification,
             checkInPhoto: undefined, // Only show check-out photo
             // For check-out, show early status if applicable
             status: log.isEarly ? "early" : "present",
@@ -130,6 +158,9 @@ export default function AttendancePage() {
       setAllLogs(expandedLogs)
       setLogs(expandedLogs)
     } catch (err) {
+      setOriginalLogs([])
+      setAllLogs([])
+      setLogs([])
       setError(err instanceof Error ? err.message : "Failed to load logs")
     } finally {
       setLoading(false)
@@ -198,17 +229,10 @@ export default function AttendancePage() {
       log.staffName,
       log.department,
       log.type,
-      log.status || (log.isLate ? "Late" : log.isEarly ? "Early" : "On Time"),
+      log.isLate ? "Late" : log.isEarly ? "Early" : "On Time",
       log.method,
     ])
-
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `attendance-${selectedDate}.csv`
-    a.click()
+    downloadCsv(`attendance-${selectedDate}.csv`, toCsv(headers, rows))
   }
 
   // Calculate stats from ORIGINAL logs (before splitting into separate rows)
@@ -229,7 +253,7 @@ export default function AttendancePage() {
           <h1 className="text-3xl font-bold text-gray-900">Attendance Logs</h1>
           <p className="text-gray-600 mt-1">Track and export attendance records</p>
         </div>
-        <Button onClick={exportToCSV} variant="outline">
+        <Button onClick={exportToCSV} variant="outline" disabled={logs.length === 0}>
           <Download className="w-4 h-4 mr-2" />
           Export CSV
         </Button>
@@ -255,7 +279,7 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{checkIns.length}</div>
-            <p className="text-xs text-muted-foreground">Today's arrivals</p>
+            <p className="text-xs text-muted-foreground">Arrivals on this date</p>
           </CardContent>
         </Card>
 
@@ -266,7 +290,7 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">{checkOuts.length}</div>
-            <p className="text-xs text-muted-foreground">Today's departures</p>
+            <p className="text-xs text-muted-foreground">Departures on this date</p>
           </CardContent>
         </Card>
 
@@ -325,7 +349,6 @@ export default function AttendancePage() {
                 <option value="present">Present</option>
                 <option value="late">Late</option>
                 <option value="early">Early</option>
-                <option value="absent">Absent</option>
               </select>
             </div>
 
@@ -356,8 +379,8 @@ export default function AttendancePage() {
                 <option value="all">All Methods</option>
                 <option value="manual">Manual</option>
                 <option value="qr">QR Code</option>
-                <option value="fingerprint">Fingerprint</option>
                 <option value="face">Face Recognition</option>
+                <option value="fingerprint">Fingerprint Device</option>
               </select>
             </div>
 
@@ -471,6 +494,13 @@ export default function AttendancePage() {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-500 capitalize">
                         {log.method}
+                        {log.faceVerification && (
+                          <span
+                            className={`ml-1 text-xs px-1.5 py-0.5 rounded ${FACE_VERIFICATION_LABELS[log.faceVerification].className}`}
+                          >
+                            {FACE_VERIFICATION_LABELS[log.faceVerification].text}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         {(log.checkInPhoto || log.checkOutPhoto) ? (

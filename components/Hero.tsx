@@ -121,7 +121,7 @@ const Hero: React.FC = () => {
               href="/register"
               className="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-600/30 group"
             >
-              Start Free Trial
+              Get Started Free
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a
@@ -155,7 +155,7 @@ const Hero: React.FC = () => {
                   <ScanFace className="h-8 w-8 text-blue-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">Biometric Security</h3>
-                <p className="text-sm text-gray-600 mt-2">Supports FaceID, TouchID, and Windows Hello.</p>
+                <p className="text-sm text-gray-600 mt-2">Hands-free face check-in and fingerprint attendance devices.</p>
              </div>
              <div className="bg-white backdrop-blur-md p-6 rounded-2xl border border-blue-100 flex flex-col items-center text-center transform hover:scale-105 transition-transform duration-300 hover:border-blue-300 shadow-lg">
                 <div className="p-3 bg-blue-100 rounded-full mb-4">

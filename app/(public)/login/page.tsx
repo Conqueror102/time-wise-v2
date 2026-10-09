@@ -74,12 +74,6 @@ function LoginForm() {
           return
         }
 
-        // Handle subscription expiry
-        if (data.code === ErrorCodes.SUBSCRIPTION_EXPIRED) {
-          router.push("/payment?reason=subscription-expired")
-          return
-        }
-
         throw new Error(getAuthErrorMessage(data.code, data.error || "Login failed"))
       }
 
@@ -92,8 +86,9 @@ function LoginForm() {
       localStorage.setItem("user", JSON.stringify(data.user))
       localStorage.setItem("organization", JSON.stringify(data.organization))
 
-      // Redirect to dashboard
-      router.push("/dashboard")
+      // Return to the page that required login, if it is a local dashboard path
+      const returnUrl = searchParams.get("returnUrl")
+      router.push(returnUrl && returnUrl.startsWith("/dashboard") ? returnUrl : "/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {

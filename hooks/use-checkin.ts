@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react"
 import { getLocalTimeString, getUTCDate } from "@/lib/utils/date"
 
+const CHECKIN_TOKEN_HEADER = "x-checkin-token"
+
 interface AttendanceStatus {
   hasCheckedIn: boolean
   hasCheckedOut: boolean
@@ -20,7 +22,7 @@ interface LastAction {
   isEarly?: boolean
 }
 
-export function useCheckin(tenantId: string) {
+export function useCheckin(checkInToken: string) {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState("")
   const [error, setError] = useState("")
@@ -28,8 +30,8 @@ export function useCheckin(tenantId: string) {
   const [statusLoading, setStatusLoading] = useState(false)
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
 
-  const checkAttendanceStatus = useCallback(async (staffId: string, immediate = false) => {
-    if (!staffId.trim() || !tenantId) return
+  const checkAttendanceStatus = useCallback(async (staffId: string, immediate = false): Promise<AttendanceStatus | null> => {
+    if (!staffId.trim() || !checkInToken) return null
 
     // Only show loading if not immediate (for manual entry)
     if (!immediate) {
@@ -41,10 +43,10 @@ export function useCheckin(tenantId: string) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          [CHECKIN_TOKEN_HEADER]: checkInToken,
         },
         body: JSON.stringify({
           staffId: staffId.trim().toUpperCase(),
-          tenantId,
         }),
       })
 
@@ -52,18 +54,20 @@ export function useCheckin(tenantId: string) {
 
       if (response.ok) {
         setAttendanceStatus(data.status)
-      } else {
-        setAttendanceStatus(null)
+        return data.status
       }
+      setAttendanceStatus(null)
+      return null
     } catch (err) {
       console.error("Status check error:", err)
       setAttendanceStatus(null)
+      return null
     } finally {
       if (!immediate) {
         setStatusLoading(false)
       }
     }
-  }, [tenantId])
+  }, [checkInToken])
 
   const capturePhotoSilently = useCallback(async (): Promise<string | null> => {
     return new Promise((resolve) => {
@@ -111,28 +115,8 @@ export function useCheckin(tenantId: string) {
                 // Draw the video frame
                 context.drawImage(video, 0, 0)
 
-              // Enhance brightness and contrast
-              const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-              const data = imageData.data
-              
-              // Adjust brightness and contrast
-              const brightness = 25 // Increase brightness
-              const contrast = 35   // Increase contrast
-              const factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
-              
-              for (let i = 0; i < data.length; i += 4) {
-                // Apply brightness and contrast to RGB channels
-                data[i] = factor * (data[i] - 128) + 128 + brightness     // Red
-                data[i + 1] = factor * (data[i + 1] - 128) + 128 + brightness // Green
-                data[i + 2] = factor * (data[i + 2] - 128) + 128 + brightness // Blue
-                // Alpha channel (data[i + 3]) remains unchanged
-              }
-              
-              // Put the enhanced image back
-              context.putImageData(imageData, 0, 0)
-
-              const enhancedImageData = canvas.toDataURL('image/jpeg', 0.85)
-              const base64 = enhancedImageData.split(',')[1]
+              // Send the unmodified frame; brightness/contrast changes reduce face-matching accuracy
+              const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 
               cleanup()
               resolve(base64)
@@ -165,7 +149,9 @@ export function useCheckin(tenantId: string) {
     staffId: string,
     type: "check-in" | "check-out",
     photo?: string,
-    method?: string
+    method?: string,
+    biometricProofs: string[] = [],
+    qrData?: string
   ) => {
     setLoading(true)
     setError("")
@@ -176,23 +162,29 @@ export function useCheckin(tenantId: string) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          [CHECKIN_TOKEN_HEADER]: checkInToken,
         },
         body: JSON.stringify({
           staffId: staffId.trim().toUpperCase(),
           type,
-          tenantId,
           photo,
           method: method || "manual",
+          biometricProofs,
+          qrData,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        if (response.status === 404) {
+        if (response.status === 401) {
+          throw new Error(data.error || "Verification failed. Please try again.")
+        } else if (response.status === 404) {
           throw new Error("Staff ID not found. Please check your ID and try again.")
         } else if (response.status === 403) {
-          throw new Error("Staff account is inactive. Please contact your administrator.")
+          throw new Error(data.error === "Staff member is inactive" || !data.error
+            ? "Staff account is inactive. Please contact your administrator."
+            : data.error)
         } else if (response.status === 400) {
           if (data.error?.includes("already checked in")) {
             await checkAttendanceStatus(staffId.trim().toUpperCase())
@@ -246,22 +238,32 @@ export function useCheckin(tenantId: string) {
     } finally {
       setLoading(false)
     }
-  }, [tenantId, checkAttendanceStatus])
+  }, [checkInToken, checkAttendanceStatus])
 
   const handleCheckIn = useCallback(async (
     staffId: string,
     type: "check-in" | "check-out",
     capturePhotos: boolean,
-    method?: string
+    method?: string,
+    biometricProofs: string[] = [],
+    /** A photo already taken (e.g. the frame used for face recognition) */
+    photo?: string,
+    /** The scanned QR code, required for QR check-ins */
+    qrData?: string
   ) => {
     if (!staffId.trim()) {
       setError("Please enter your Staff ID")
       return false
     }
 
-    if (!tenantId) {
+    if (!checkInToken) {
       setError("System not properly initialized. Please refresh and try again.")
       return false
+    }
+
+    // Reuse a photo the caller already has instead of opening the camera again
+    if (capturePhotos && photo) {
+      return await processCheckIn(staffId, type, photo, method, biometricProofs, qrData)
     }
 
     // If photo capture is enabled, capture silently
@@ -275,7 +277,7 @@ export function useCheckin(tenantId: string) {
         const capturedPhoto = await capturePhotoSilently()
         if (capturedPhoto) {
           console.log("Photo captured successfully, length:", capturedPhoto.length)
-          return await processCheckIn(staffId, type, capturedPhoto, method)
+          return await processCheckIn(staffId, type, capturedPhoto, method, biometricProofs, qrData)
         } else {
           console.log("Photo capture failed - no photo returned")
           throw new Error("Photo capture failed. Please try again.")
@@ -289,8 +291,8 @@ export function useCheckin(tenantId: string) {
     }
 
     // Process check-in normally (without photo)
-    return await processCheckIn(staffId, type, undefined, method)
-  }, [tenantId, capturePhotoSilently, processCheckIn])
+    return await processCheckIn(staffId, type, undefined, method, biometricProofs, qrData)
+  }, [checkInToken, capturePhotoSilently, processCheckIn])
 
   const clearMessages = useCallback(() => {
     setSuccess("")

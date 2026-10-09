@@ -13,9 +13,11 @@ interface CheckInUrlCopyProps {
       checkInPasscode?: string
     }
   }
+  /** Called with the saved organization after a passcode is set here */
+  onPasscodeSet?: (organization: any) => void
 }
 
-export function CheckInUrlCopy({ organization }: CheckInUrlCopyProps) {
+export function CheckInUrlCopy({ organization, onPasscodeSet }: CheckInUrlCopyProps) {
   const [checkInUrl, setCheckInUrl] = useState("")
   const [copied, setCopied] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -59,20 +61,19 @@ export function CheckInUrlCopy({ organization }: CheckInUrlCopyProps) {
         body: JSON.stringify({ checkInPasscode: newPasscode }),
       })
 
-      if (!response.ok) throw new Error("Failed")
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || "Error saving passcode")
 
-      const org = JSON.parse(localStorage.getItem("organization") || "{}")
-      org.settings = org.settings || {}
-      org.settings.checkInPasscode = newPasscode
-      localStorage.setItem("organization", JSON.stringify(org))
+      localStorage.setItem("organization", JSON.stringify(data.organization))
+      onPasscodeSet?.(data.organization)
 
       navigator.clipboard.writeText(checkInUrl)
       setCopied(true)
       setShowModal(false)
       setNewPasscode("")
       setTimeout(() => setCopied(false), 2000)
-    } catch {
-      setError("Error saving passcode")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error saving passcode")
     } finally {
       setLoading(false)
     }

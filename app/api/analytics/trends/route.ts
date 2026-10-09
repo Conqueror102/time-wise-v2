@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
-import { AttendanceLog, TenantError } from "@/lib/types"
+import { AttendanceLog, Staff, TenantError } from "@/lib/types"
+import { addDays, getAnalyticsRange, getCheckOutTime, getJoinDate, isCheckIn } from "@/lib/analytics/range"
 
 export const dynamic = 'force-dynamic'
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+/** Monday-based weekday index (0 = Mon … 6 = Sun) of a "YYYY-MM-DD" date */
+function weekdayIndex(date: string): number {
+  const [y, m, d] = date.split("-").map(Number)
+  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,77 +21,28 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
-    // Check feature access - Trends are Enterprise only (unless in development mode)
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (!isDevelopment) {
-      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
-      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
-      
-      const subscription = await getSubscriptionStatus(context.tenantId)
-      
-      // Check if can access trends analytics (Enterprise only)
-      if (!hasFeatureAccess(subscription.plan as any, "analyticsTrends", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Trends analytics are only available in the Enterprise plan. Upgrade to access advanced insights.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-    }
-
-    const searchParams = request.nextUrl.searchParams
-    const range = searchParams.get("range") || "30d"
-
-    const now = new Date()
-    const daysMap: Record<string, number> = {
-      "7d": 7,
-      "30d": 30,
-      "90d": 90,
-      "1y": 365,
-    }
-    const days = daysMap[range] || 30
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-    const startDateStr = startDate.toISOString().split("T")[0]
-
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
+    const range = await getAnalyticsRange(db, context.tenantId, request.nextUrl.searchParams.get("range"))
 
-    // Get attendance records
-    const records = await tenantDb.find<AttendanceLog>("attendance", {
-      date: { $gte: startDateStr },
-    })
+    // The weekly comparison always needs the last 14 days, even for the 7-day range
+    const fetchFrom = [range.start, addDays(range.end, -13)].sort()[0]
+    const [records, activeStaff] = await Promise.all([
+      tenantDb.find<AttendanceLog>("attendance", { date: { $gte: fetchFrom, $lte: range.end } }),
+      tenantDb.find<Staff>("staff", { isActive: true }),
+    ])
 
-    // Group by date
-    const dataByDate: Record<string, any> = {}
-    records.forEach((record) => {
-      const date = record.date
-      if (!dataByDate[date]) {
-        dataByDate[date] = {
-          checkIns: 0,
-          checkOuts: 0,
-          onTime: 0,
-          late: 0,
-          absent: 0,
-        }
+    const byDate: Record<string, { checkIns: number; checkOuts: number; onTime: number; late: number }> = {}
+    for (const record of records) {
+      const day = (byDate[record.date] ??= { checkIns: 0, checkOuts: 0, onTime: 0, late: 0 })
+      if (isCheckIn(record)) {
+        day.checkIns++
+        if (record.isLate === true) day.late++
+        else day.onTime++
       }
-      // Count check-ins
-      if (record.checkInTime) {
-        dataByDate[date].checkIns++
-        if (record.isLate === true) {
-          dataByDate[date].late++
-        } else {
-          dataByDate[date].onTime++
-        }
-      }
-      // Count check-outs
-      if (record.checkOutTime) {
-        dataByDate[date].checkOuts++
-      }
-    })
+      if (getCheckOutTime(record)) day.checkOuts++
+    }
 
-    // Generate labels and data arrays
     const labels: string[] = []
     const checkIns: number[] = []
     const checkOuts: number[] = []
@@ -90,38 +50,33 @@ export async function GET(request: NextRequest) {
     const late: number[] = []
     const absent: number[] = []
 
-    // Fill in all dates in range
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
-      const dateStr = date.toISOString().split("T")[0]
-      const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    for (const date of range.dates) {
+      const [y, m, d] = date.split("-").map(Number)
+      labels.push(new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))
+      const day = byDate[date] ?? { checkIns: 0, checkOuts: 0, onTime: 0, late: 0 }
+      checkIns.push(day.checkIns)
+      checkOuts.push(day.checkOuts)
+      onTime.push(day.onTime)
+      late.push(day.late)
 
-      labels.push(label)
-      const dayData = dataByDate[dateStr] || { checkIns: 0, checkOuts: 0, onTime: 0, late: 0, absent: 0 }
-      checkIns.push(dayData.checkIns)
-      checkOuts.push(dayData.checkOuts)
-      onTime.push(dayData.onTime)
-      late.push(dayData.late)
-      absent.push(dayData.absent)
+      // Absences only count on days the organization was open, for staff who had joined by then
+      const staffOnDay = activeStaff.filter((s) => {
+        const joined = getJoinDate(s.createdAt, range.timezone)
+        return !joined || joined <= date
+      }).length
+      absent.push(day.checkIns > 0 ? Math.max(0, staffOnDay - day.checkIns) : 0)
     }
 
-    // Weekly comparison data
-    const weeklyLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    // Check-ins per weekday: last 7 days vs the 7 days before
+    const thisWeekStart = addDays(range.end, -6)
+    const lastWeekStart = addDays(range.end, -13)
     const thisWeek = new Array(7).fill(0)
     const lastWeek = new Array(7).fill(0)
-
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-
-    records.forEach((record) => {
-      const recordDate = new Date(record.date)
-      const dayOfWeek = recordDate.getDay()
-      if (recordDate >= oneWeekAgo && record.checkInTime) {
-        thisWeek[dayOfWeek]++
-      } else if (recordDate >= twoWeeksAgo && recordDate < oneWeekAgo && record.checkInTime) {
-        lastWeek[dayOfWeek]++
-      }
-    })
+    for (const record of records) {
+      if (!isCheckIn(record)) continue
+      if (record.date >= thisWeekStart) thisWeek[weekdayIndex(record.date)]++
+      else if (record.date >= lastWeekStart) lastWeek[weekdayIndex(record.date)]++
+    }
 
     return NextResponse.json({
       labels,
@@ -130,7 +85,7 @@ export async function GET(request: NextRequest) {
       onTime,
       late,
       absent,
-      weeklyLabels,
+      weeklyLabels: WEEKDAY_LABELS,
       thisWeek,
       lastWeek,
     })

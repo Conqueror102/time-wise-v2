@@ -4,7 +4,8 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
-import { withAuth } from "@/lib/auth"
+import { withAuth, toPublicUser } from "@/lib/auth"
+import { isFaceRecognitionConfigured } from "@/lib/services/face-recognition"
 import { User, Organization, TenantError } from "@/lib/types"
 import { ObjectId } from "mongodb"
 
@@ -41,14 +42,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Return user data (without password)
-    const { password: _, ...userWithoutPassword } = user
-
     return NextResponse.json({
       success: true,
-      user: {
-        ...userWithoutPassword,
-        _id: user._id!.toString(),
+      user: toPublicUser(user),
+      serverFeatures: {
+        faceRecognition: isFaceRecognitionConfigured(),
       },
       organization: {
         ...organization,

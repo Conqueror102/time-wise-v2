@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
     const [
       recentOrganizations,
       recentUsers,
-      recentPayments,
       recentCheckins,
     ] = await Promise.all([
       // Recent organizations (last 10)
@@ -57,31 +56,12 @@ export async function GET(request: NextRequest) {
         ])
         .toArray(),
 
-      // Recent successful payments (last 10)
-      db
-        .collection("paystack_webhooks")
-        .find({
-          event: { $in: ["charge.success", "invoice.payment_success"] },
-          status: "success",
-        })
-        .sort({ timestamp: -1 })
-        .limit(10)
-        .toArray(),
-
       // Recent check-ins (last 10)
       db
         .collection("attendance")
         .aggregate([
           { $sort: { checkInTime: -1 } },
           { $limit: 10 },
-          {
-            $lookup: {
-              from: "users",
-              localField: "userId",
-              foreignField: "_id",
-              as: "user",
-            },
-          },
           {
             $lookup: {
               from: "organizations",
@@ -98,13 +78,7 @@ export async function GET(request: NextRequest) {
               _id: 1,
               checkInTime: 1,
               isLate: 1,
-              userName: {
-                $concat: [
-                  { $arrayElemAt: ["$user.firstName", 0] },
-                  " ",
-                  { $arrayElemAt: ["$user.lastName", 0] },
-                ],
-              },
+              userName: "$staffName",
               organizationName: { $arrayElemAt: ["$organization.name", 0] },
             },
           },
@@ -125,7 +99,6 @@ export async function GET(request: NextRequest) {
         metadata: {
           organizationName: org.name,
           subdomain: org.subdomain,
-          plan: org.subscriptionTier,
         },
         timestamp: org.createdAt,
         icon: "building",
@@ -149,24 +122,6 @@ export async function GET(request: NextRequest) {
         timestamp: user.createdAt,
         icon: "user",
         color: "green",
-      })
-    })
-
-    // Add payments
-    recentPayments.forEach((payment) => {
-      activities.push({
-        id: payment._id.toString(),
-        type: "payment_success",
-        title: "Payment Received",
-        description: `${payment.organizationName || "Organization"} paid ₦${((payment.amount || 0) / 100).toLocaleString()}`,
-        metadata: {
-          organizationName: payment.organizationName,
-          amount: payment.amount,
-          planCode: payment.planCode,
-        },
-        timestamp: payment.timestamp,
-        icon: "dollar",
-        color: "emerald",
       })
     })
 

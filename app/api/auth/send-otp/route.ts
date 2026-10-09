@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         },
         $push: {
           otpRequests: new Date(),
-        },
+        } as any,
       }
     )
 

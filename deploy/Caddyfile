@@ -1,0 +1,18 @@
+# HTTPS for TimeWise. Caddy obtains and renews the certificate automatically.
+# DOMAIN comes from .env (e.g. DOMAIN=attendance.example.com).
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000
+}
+
+# Most ZKTeco attendance devices can only use plain HTTP, so their endpoints
+# stay reachable over HTTP; everything else is redirected to HTTPS.
+http://{$DOMAIN} {
+	handle /iclock/* {
+		reverse_proxy app:3000
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}

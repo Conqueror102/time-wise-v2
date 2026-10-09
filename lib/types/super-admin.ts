@@ -43,21 +43,10 @@ export interface SuperAdminContext {
 export interface DashboardStats {
   totalOrganizations: number
   totalActiveUsers: number
-  totalActiveSubscriptions: number
-  totalRevenue: number
-  mrr: number
+  totalStaff: number
   activeTenants: number
   suspendedTenants: number
   dailyCheckins: number
-}
-
-/**
- * Revenue data for charts
- */
-export interface RevenueData {
-  date: string
-  amount: number
-  currency: string
 }
 
 /**
@@ -66,24 +55,6 @@ export interface RevenueData {
 export interface OrgGrowthData {
   month: string
   count: number
-}
-
-/**
- * Subscription distribution data
- */
-export interface SubscriptionData {
-  plan: string
-  count: number
-  percentage: number
-}
-
-/**
- * Payment success rate data
- */
-export interface PaymentRateData {
-  successful: number
-  failed: number
-  successRate: number
 }
 
 /**
@@ -102,7 +73,6 @@ export interface TenantActivity {
 export interface OrganizationDetails {
   organization: any // Organization type from existing system
   users: any[] // User type from existing system
-  recentPayments: any[]
   analytics: {
     totalStaff: number
     activeStaff: number
@@ -208,33 +178,6 @@ export type AuditAction =
   | "VIEW_LOGS"
 
 /**
- * Paystack webhook event
- */
-export interface PaystackWebhook {
-  _id: ObjectId
-  event: PaystackEvent
-  tenantId?: string
-  organizationName?: string
-  planCode?: string
-  status: "success" | "failed"
-  amount?: number
-  currency?: string
-  reference: string
-  timestamp: Date
-  rawPayload: Record<string, any>
-}
-
-/**
- * Paystack event types
- */
-export type PaystackEvent =
-  | "charge.success"
-  | "subscription.create"
-  | "subscription.disable"
-  | "invoice.payment_failed"
-  | "invoice.payment_success"
-
-/**
  * Platform stats cache entry
  */
 export interface PlatformStatsCache {
@@ -243,51 +186,6 @@ export interface PlatformStatsCache {
   value: number | string | Record<string, any>
   calculatedAt: Date
   expiresAt: Date
-}
-
-/**
- * Paystack transaction
- */
-export interface PaystackTransaction {
-  id: string
-  reference: string
-  amount: number
-  currency: string
-  status: string
-  customer: {
-    email: string
-    customer_code: string
-  }
-  metadata: Record<string, any>
-  paid_at: string
-  created_at: string
-}
-
-/**
- * Paystack subscription
- */
-export interface PaystackSubscription {
-  subscription_code: string
-  email_token: string
-  amount: number
-  plan: {
-    name: string
-    plan_code: string
-  }
-  status: string
-  next_payment_date: string
-  created_at: string
-}
-
-/**
- * Transaction statistics
- */
-export interface TransactionStats {
-  totalTransactions: number
-  successfulTransactions: number
-  failedTransactions: number
-  totalRevenue: number
-  averageTransactionValue: number
 }
 
 /**
@@ -306,7 +204,6 @@ export interface OrgFilters {
   perPage?: number
   search?: string
   status?: string
-  subscriptionTier?: string
 }
 
 /**
@@ -332,17 +229,6 @@ export interface AuditLogFilters {
   tenantId?: string
   dateFrom?: Date
   dateTo?: Date
-}
-
-/**
- * Revenue report
- */
-export interface RevenueReport {
-  dateRange: DateRange
-  totalRevenue: number
-  revenueByPlan: Array<{ plan: string; amount: number }>
-  revenueByTenant: Array<{ tenant: string; amount: number }>
-  revenueTrend: Array<{ date: string; amount: number }>
 }
 
 /**

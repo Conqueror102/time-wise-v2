@@ -31,9 +31,7 @@ interface OrganizationDetails {
   name: string
   subdomain: string
   adminEmail: string
-  subscriptionTier: string
   status: string
-  trialEnds?: string
   createdAt: string
   analytics: {
     totalStaff: number
@@ -229,7 +227,7 @@ export default function OrganizationDetailsPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {org.status === "active" ? (
+            {org.status === "active" || org.status === "trial" ? (
               <DropdownMenuItem onClick={handleSuspend}>
                 <Ban className="mr-2 h-4 w-4" />
                 Suspend Organization
@@ -240,10 +238,6 @@ export default function OrganizationDetailsPage() {
                 Activate Organization
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem>
-              <Edit className="mr-2 h-4 w-4" />
-              Update Plan
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDelete} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Organization
@@ -253,7 +247,7 @@ export default function OrganizationDetailsPage() {
       </div>
 
       {/* Info Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -267,20 +261,6 @@ export default function OrganizationDetailsPage() {
                 </Badge>
               </div>
               <Building2 className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Plan</p>
-                <p className="text-2xl font-bold mt-1">
-                  {org.subscriptionTier.toUpperCase()}
-                </p>
-              </div>
-              <CreditCard className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -303,11 +283,9 @@ export default function OrganizationDetailsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Trial Ends</p>
+                <p className="text-sm text-gray-600">Created</p>
                 <p className="text-sm font-medium mt-1">
-                  {org.trialEnds
-                    ? new Date(org.trialEnds).toLocaleDateString()
-                    : "N/A"}
+                  {new Date(org.createdAt).toLocaleDateString()}
                 </p>
               </div>
               <Activity className="h-8 w-8 text-orange-600" />

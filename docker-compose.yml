@@ -1,0 +1,53 @@
+# Run the whole app locally:  docker compose up -d --build
+# App: http://localhost:3000   MongoDB: mongodb://localhost:27017/staff_checkin
+# CompreFace (face recognition admin UI): http://localhost:8001
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Free, self-hosted face recognition (https://github.com/exadel-inc/CompreFace).
+  # FaceNet build; the ArcFace builds use models licensed for non-commercial use only.
+  # Opt-in because the image is a 2.2 GB download: docker compose --profile face up -d
+  compreface:
+    image: exadel/compreface:1.2.0
+    profiles: ["face"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:80"
+    volumes:
+      - compreface-data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/staff_checkin
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      CRON_SECRET: ${CRON_SECRET:-}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-UTC}
+      COMPREFACE_URL: http://compreface:80
+      COMPREFACE_API_KEY: ${COMPREFACE_API_KEY:-}
+
+volumes:
+  mongo-data:
+  compreface-data:

@@ -1,68 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Users, UserCheck, UserX, Clock, Calendar, TrendingUp } from "lucide-react"
-import { getLocalTimeString, getLocalDateString } from "@/lib/utils/date"
+import { getLocalTimeString } from "@/lib/utils/date"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SubscriptionStatusCard } from "@/components/subscription-status-card"
-import { TrialExpirationBanner } from "@/components/subscription/trial-expiration-banner"
+import { Button } from "@/components/ui/button"
+import { formatDateLabel, useDashboardStats } from "@/hooks/use-dashboard-stats"
 import Link from "next/link"
 
-interface DashboardStats {
-  totalStaff: number
-  presentToday: number
-  currentlyPresent: number
-  lateToday: number
-  absentToday: number
-  earlyDepartureToday: number
-}
-
-interface StaffPresent {
-  staffId: string
-  name: string
-  department: string
-  checkInTime: string
-  isLate: boolean
-}
-
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [recentActivity, setRecentActivity] = useState<StaffPresent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
-
-  const fetchDashboardData = async () => {
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch("/api/dashboard/stats", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch dashboard data")
-      }
-
-      const data = await response.json()
-      setStats(data.stats)
-      setRecentActivity((data.currentStaff || []).slice(0, 5))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard")
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, loading, error, refresh } = useDashboardStats()
+  const stats = data?.stats
+  // Most recent arrivals today, including people who have since checked out
+  const recentActivity = (data?.presentToday || []).slice(0, 5)
 
   const formatTime = (timestamp: string) => {
     return getLocalTimeString(new Date(timestamp))
   }
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -72,23 +27,23 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-        {error}
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between gap-4">
+        <span>{error}</span>
+        <Button size="sm" variant="outline" onClick={refresh}>
+          Try again
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Trial Expiration Banner */}
-      <TrialExpirationBanner />
-
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-1">
-            {getLocalDateString(new Date())}
+            {formatDateLabel(data?.date)}
           </p>
         </div>
         <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg">
@@ -125,7 +80,7 @@ export default function DashboardPage() {
             <CardContent>
               <div className="text-3xl font-bold text-green-600">{stats?.presentToday || 0}</div>
               <p className="text-sm text-gray-500 mt-1">
-                {stats?.totalStaff ? Math.round(((stats.presentToday || 0) / stats.totalStaff) * 100) : 0}% attendance
+                {stats?.totalStaff ? Math.min(100, Math.round(((stats.presentToday || 0) / stats.totalStaff) * 100)) : 0}% attendance
               </p>
             </CardContent>
           </Card>
@@ -161,7 +116,7 @@ export default function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/dashboard/present">
+        <Link href="/dashboard/attendance">
           <Card className="cursor-pointer border-0 shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Currently In</CardTitle>
@@ -225,6 +180,9 @@ export default function DashboardPage() {
                     <div className="text-sm font-semibold text-gray-900">{formatTime(staff.checkInTime)}</div>
                     {staff.isLate && (
                       <div className="text-xs text-orange-600 font-medium mt-1">Late</div>
+                    )}
+                    {staff.checkOutTime && (
+                      <div className="text-xs text-gray-500 mt-1">Left {formatTime(staff.checkOutTime)}</div>
                     )}
                   </div>
                 </div>

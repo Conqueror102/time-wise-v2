@@ -7,16 +7,17 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Authenticate super admin
     const context = await withSuperAdminAuth(request)
 
     // Activate organization
     const orgService = new OrganizationService()
     await orgService.activateOrganization(
-      params.id,
+      id,
       context.userId,
       context.email,
       getIpAddress(request),

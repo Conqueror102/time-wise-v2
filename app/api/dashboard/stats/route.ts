@@ -1,13 +1,14 @@
 /**
- * Dashboard Statistics API - Multi-tenant aware
+ * Dashboard Statistics API - today's attendance for the dashboard and report pages
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { getOrganizationToday } from "@/lib/checkin/policy"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, AttendanceLog, TenantError } from "@/lib/types"
-import { hasFeatureAccess } from "@/lib/features/feature-access"
+import { getCheckInTime, getCheckOutTime } from "@/lib/analytics/range"
 
 export const dynamic = 'force-dynamic'
 
@@ -19,76 +20,55 @@ export async function GET(request: NextRequest) {
 
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
+    const today = await getOrganizationToday(db, context.tenantId)
 
-    // Check if user has access to reports/history
-    const canAccessReports = await hasFeatureAccess(
-      context.tenantId,
-      "canAccessHistory",
-      process.env.NODE_ENV === "development"
-    )
+    const [activeStaff, todayRecords] = await Promise.all([
+      tenantDb.find<Staff>("staff", { isActive: true }),
+      tenantDb.find<AttendanceLog>("attendance", { date: today }),
+    ])
 
-    if (!canAccessReports) {
-      return NextResponse.json(
-        { error: "This feature requires a paid subscription plan" },
-        { status: 403 }
-      )
-    }
-
-    const today = new Date().toISOString().split("T")[0]
-
-    // Get total staff count
-    const totalStaff = await tenantDb.count<Staff>("staff", { isActive: true })
-
-    // Get today's attendance records
-    const todayAttendance = await tenantDb.find<AttendanceLog>("attendance", {
-      date: today,
-    })
-
-    // Get staff who checked in (have checkInTime)
-    const checkedInToday = todayAttendance.filter((log) => log.checkInTime)
-
-    // Get current staff (checked in but not checked out)
-    const currentStaff = todayAttendance.filter((log) => log.checkInTime && !log.checkOutTime)
-
-    // Get late arrivals today (only those who actually checked in late)
-    const lateToday = todayAttendance.filter((log) => log.checkInTime && log.isLate === true)
-
-    // Get absent staff
-    const checkedInStaffIds = new Set(checkedInToday.map((log) => log.staffId))
-    const allStaff = await tenantDb.find<Staff>("staff", { isActive: true })
-    const absentStaff = allStaff.filter((staff) => !checkedInStaffIds.has(staff.staffId))
-
-    // Get early departures today (only those who actually checked out early)
-    const earlyDepartures = todayAttendance.filter((log) => log.checkOutTime && log.isEarly === true)
-
-    return NextResponse.json({
-      success: true,
-      stats: {
-        totalStaff,
-        presentToday: checkedInToday.length,
-        currentlyPresent: currentStaff.length,
-        lateToday: lateToday.length,
-        absentToday: absentStaff.length,
-        earlyDepartureToday: earlyDepartures.length,
-      },
-      currentStaff: currentStaff.map((log) => ({
+    // One entry per staff member who checked in today, newest first
+    const present = todayRecords
+      .map((log) => ({ log, checkInTime: getCheckInTime(log), checkOutTime: getCheckOutTime(log) }))
+      .filter((entry): entry is typeof entry & { checkInTime: Date } => !!entry.checkInTime)
+      .sort((a, b) => b.checkInTime.getTime() - a.checkInTime.getTime())
+      .map(({ log, checkInTime, checkOutTime }) => ({
         staffId: log.staffId,
         name: log.staffName,
         department: log.department,
-        checkInTime: log.checkInTime || log.timestamp,
-        isLate: log.isLate,
-      })),
+        checkInTime,
+        checkOutTime,
+        isLate: log.isLate === true,
+        isEarly: log.isEarly === true,
+      }))
+
+    const checkedInIds = new Set(present.map((p) => p.staffId))
+    const absentStaff = activeStaff.filter((staff) => !checkedInIds.has(staff.staffId))
+    const currentStaff = present.filter((p) => !p.checkOutTime)
+    const lateArrivals = present.filter((p) => p.isLate)
+    const earlyDepartures = present
+      .filter((p) => p.checkOutTime && p.isEarly)
+      .map((p) => ({ ...p, checkOutTime: p.checkOutTime! }))
+
+    return NextResponse.json({
+      success: true,
+      date: today,
+      stats: {
+        totalStaff: activeStaff.length,
+        presentToday: present.length,
+        currentlyPresent: currentStaff.length,
+        lateToday: lateArrivals.length,
+        absentToday: absentStaff.length,
+        earlyDepartureToday: earlyDepartures.length,
+      },
+      presentToday: present,
+      currentStaff,
+      lateArrivals,
+      earlyDepartures,
       absentStaff: absentStaff.map((staff) => ({
         staffId: staff.staffId,
         name: staff.name,
         department: staff.department,
-      })),
-      earlyDepartures: earlyDepartures.map((log) => ({
-        staffId: log.staffId,
-        name: log.staffName,
-        department: log.department,
-        checkOutTime: log.checkOutTime || log.timestamp,
-        isEarly: log.isEarly,
       })),
     })
   } catch (error) {

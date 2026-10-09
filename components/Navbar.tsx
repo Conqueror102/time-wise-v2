@@ -19,7 +19,6 @@ const Navbar: React.FC = () => {
   const navLinks = [
     { name: 'Features', href: '#features' },
     { name: 'Benefits', href: '#benefits' },
-    { name: 'Pricing', href: '#pricing' },
   ];
 
   const handleNavClick = (href: string) => {
@@ -113,7 +112,7 @@ const Navbar: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                     className="block w-full text-center bg-[#2563eb] text-white px-3 py-3 rounded-xl text-base font-semibold mt-6"
                   >
-                    Start Free Trial
+                    Get Started Free
                   </a>
               </div>
             </motion.div>
