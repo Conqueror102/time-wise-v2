@@ -1,79 +1,61 @@
 /**
  * Register Face Data API
+ * Requires an enrollment token issued by an org admin for this staff member.
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
-import { Staff, FaceData } from "@/lib/types"
+import { Staff, FaceData, TenantError } from "@/lib/types"
+import { verifyEnrollmentToken } from "@/lib/auth/checkin-tokens"
+import { deleteFace, registerFace } from "@/lib/services/face-recognition"
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const { staffId, faceImage, faceEmbedding, tenantId } = await request.json()
+    const { enrollToken, faceImage } = await request.json()
+    const { tenantId, staffId } = verifyEnrollmentToken(enrollToken)
 
-    if (!staffId || (!faceImage && !faceEmbedding)) {
-      return NextResponse.json(
-        { error: "Staff ID and face data are required" },
-        { status: 400 }
-      )
+    if (!faceImage || typeof faceImage !== "string") {
+      return NextResponse.json({ error: "Face image is required" }, { status: 400 })
     }
 
     const db = await getDatabase()
-    
-    // Find staff member
-    let finalTenantId = tenantId
-    let staff: any = null
-    
-    if (!finalTenantId) {
-      const staffDoc = await db.collection("staff").findOne({ staffId })
-      
-      if (!staffDoc) {
-        return NextResponse.json({ error: "Staff not found" }, { status: 404 })
-      }
-      
-      finalTenantId = staffDoc.tenantId
-      staff = staffDoc
-    } else {
-      const tenantDb = createTenantDatabase(db, finalTenantId)
-      staff = await tenantDb.findOne<Staff>("staff", { staffId })
+    const tenantDb = createTenantDatabase(db, tenantId)
+    const staff = await tenantDb.findOne<Staff>("staff", { staffId })
+
+    if (!staff || !staff.isActive) {
+      return NextResponse.json({ error: "Staff not found or inactive" }, { status: 404 })
     }
 
-    if (!staff) {
-      return NextResponse.json({ error: "Staff not found" }, { status: 404 })
-    }
+    const faceResult = await registerFace(faceImage, tenantId, staffId)
 
-    // Register face with AWS Rekognition
-    const { registerFace } = await import("@/lib/services/aws-rekognition")
-    const rekognitionResult = await registerFace(faceImage || faceEmbedding!, staffId)
-
-    if (!rekognitionResult.success) {
+    if (!faceResult.success || !faceResult.faceId) {
       return NextResponse.json(
-        { error: rekognitionResult.error || "Failed to register face" },
+        { error: faceResult.error || "Failed to register face" },
         { status: 400 }
       )
     }
 
-    // Create face data
+    // Remove the previous face so it can no longer match. CompreFace already
+    // replaced it during registration; Rekognition keeps old faces until deleted.
+    const replacedInPlace = staff.faceData?.provider === "compreface" && faceResult.provider === "compreface"
+    if (staff.faceData && !replacedInPlace) {
+      await deleteFace(staff.faceData, tenantId, staffId)
+    }
+
+    // The image itself lives in the recognition service; only keep the reference
     const faceData: FaceData = {
-      faceId: rekognitionResult.faceId || `face_${staffId}_${Date.now()}`,
-      faceImage: faceImage || undefined,
-      faceEmbedding: faceEmbedding || undefined,
+      faceId: faceResult.faceId,
+      provider: faceResult.provider,
       registeredAt: new Date(),
     }
 
-    // Update staff record with face data
-    const tenantDb = createTenantDatabase(db, finalTenantId)
     await tenantDb.updateOne<Staff>(
       "staff",
       { staffId },
-      {
-        $set: { 
-          faceData,
-          updatedAt: new Date(),
-        },
-      }
+      { $set: { faceData, updatedAt: new Date() } }
     )
 
     return NextResponse.json({
@@ -82,10 +64,10 @@ export async function POST(request: NextRequest) {
       faceId: faceData.faceId,
     })
   } catch (error) {
+    if (error instanceof TenantError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode })
+    }
     console.error("Register face error:", error)
-    return NextResponse.json(
-      { error: "Failed to register face" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to register face" }, { status: 500 })
   }
 }

@@ -10,17 +10,12 @@ import { StaffPerformance } from "@/components/analytics/staff-performance"
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector"
 import { ExportButton } from "@/components/analytics/export-button"
 import { BarChart3, TrendingUp, Clock, Users, Calendar } from "lucide-react"
-import { PageGate } from "@/components/subscription/page-gate"
-import { FeatureGate } from "@/components/subscription/feature-gate"
-import { useSubscription } from "@/hooks/use-subscription"
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">("30d")
   const [activeView, setActiveView] = useState("overview")
-  const { hasFeature } = useSubscription()
 
   return (
-    <PageGate feature="canAccessAnalytics">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -38,9 +33,7 @@ export default function AnalyticsPage() {
           
           <div className="flex items-center gap-3">
             <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
-            <FeatureGate feature="exportData" showLockOverlay={false}>
-              <ExportButton timeRange={timeRange} />
-            </FeatureGate>
+            <ExportButton timeRange={timeRange} />
           </div>
         </div>
 
@@ -53,7 +46,6 @@ export default function AnalyticsPage() {
             <TabsTrigger 
               value="overview" 
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              disabled={!hasFeature("analyticsOverview")}
             >
               <TrendingUp className="w-4 h-4 mr-2" />
               Overview
@@ -61,7 +53,6 @@ export default function AnalyticsPage() {
             <TabsTrigger 
               value="trends" 
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              disabled={!hasFeature("analyticsTrends")}
             >
               <Calendar className="w-4 h-4 mr-2" />
               Trends
@@ -69,7 +60,6 @@ export default function AnalyticsPage() {
             <TabsTrigger 
               value="lateness" 
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              disabled={!hasFeature("analyticsLateness")}
             >
               <Clock className="w-4 h-4 mr-2" />
               Lateness
@@ -77,7 +67,6 @@ export default function AnalyticsPage() {
             <TabsTrigger 
               value="departments" 
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              disabled={!hasFeature("analyticsDepartment")}
             >
               <Users className="w-4 h-4 mr-2" />
               Departments
@@ -85,7 +74,6 @@ export default function AnalyticsPage() {
             <TabsTrigger 
               value="staff" 
               className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              disabled={!hasFeature("analyticsPerformance")}
             >
               <Users className="w-4 h-4 mr-2" />
               Staff
@@ -93,36 +81,25 @@ export default function AnalyticsPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
-            <FeatureGate feature="analyticsOverview">
-              <AttendanceTrends timeRange={timeRange} />
-            </FeatureGate>
+            <AttendanceTrends timeRange={timeRange} />
           </TabsContent>
 
           <TabsContent value="trends" className="space-y-6 mt-6">
-            <FeatureGate feature="analyticsTrends">
-              <AttendanceTrends timeRange={timeRange} detailed />
-            </FeatureGate>
+            <AttendanceTrends timeRange={timeRange} detailed />
           </TabsContent>
 
           <TabsContent value="lateness" className="space-y-6 mt-6">
-            <FeatureGate feature="analyticsLateness">
-              <LatenessAnalysis timeRange={timeRange} />
-            </FeatureGate>
+            <LatenessAnalysis timeRange={timeRange} />
           </TabsContent>
 
           <TabsContent value="departments" className="space-y-6 mt-6">
-            <FeatureGate feature="analyticsDepartment">
-              <DepartmentBreakdown timeRange={timeRange} />
-            </FeatureGate>
+            <DepartmentBreakdown timeRange={timeRange} />
           </TabsContent>
 
           <TabsContent value="staff" className="space-y-6 mt-6">
-            <FeatureGate feature="analyticsPerformance">
-              <StaffPerformance timeRange={timeRange} />
-            </FeatureGate>
+            <StaffPerformance timeRange={timeRange} />
           </TabsContent>
         </Tabs>
       </div>
-    </PageGate>
   )
 }

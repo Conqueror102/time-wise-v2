@@ -11,19 +11,14 @@ import { getUTCDate } from "@/lib/utils/date"
 import { User, QrCode, ScanFace, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FaceRecognition } from "@/components/face-recognition"
+import { HandsFreeFace } from "@/components/checkin/hands-free-face"
 import { UnlockScreen } from "@/components/checkin/unlock-screen"
-import { BiometricVerificationModal } from "@/components/checkin/fingerprint-verification-modal"
 import { CheckinHeader } from "@/components/checkin/checkin-header"
 import { SuccessMessage } from "@/components/checkin/success-message"
 import { ManualEntryTab } from "@/components/checkin/manual-entry-tab"
 import { QRScannerTab } from "@/components/checkin/qr-scanner-tab"
 import { useCheckin } from "@/hooks/use-checkin"
 import { useToast } from "@/hooks/use-toast"
-import { useSubscriptionPayment } from "@/hooks/use-subscription-payment"
-import { Toaster } from "@/components/ui/toaster"
-import { UpgradeModal } from "@/components/subscription/upgrade-modal"
-import { getFeatureGateMessage, getRecommendedPlan } from "@/lib/features/feature-manager"
 
 export default function CheckInPage() {
   // Core state
@@ -31,22 +26,16 @@ export default function CheckInPage() {
   const [showScanner, setShowScanner] = useState(false)
   const [activeTab, setActiveTab] = useState("manual")
   const [scannerKey, setScannerKey] = useState(0)
+  // The scanned QR text; the server checks its signature on QR check-ins
+  const [qrPayload, setQrPayload] = useState("")
   const [isUnlocked, setIsUnlocked] = useState(false)
-  const [tenantId, setTenantId] = useState("")
+  const [checkInToken, setCheckInToken] = useState("")
   const [organizationName, setOrganizationName] = useState("")
   const [capturePhotos, setCapturePhotos] = useState(false)
-  const [fingerprintEnabled, setFingerprintEnabled] = useState(false)
-  const [isInTrial, setIsInTrial] = useState(false)
   const [showQRSuccess, setShowQRSuccess] = useState(false)
   const [scannerClosing, setScannerClosing] = useState(false)
   const [message, setMessage] = useState("")
   const [messageType, setMessageType] = useState<"success" | "error" | "">("")
-  const [showUpgradePopup, setShowUpgradePopup] = useState(false)
-  const [upgradeFeature, setUpgradeFeature] = useState<"photoVerification" | "fingerprintCheckIn">("photoVerification")
-  const [subscriptionPlan, setSubscriptionPlan] = useState<"starter" | "professional" | "enterprise">("starter")
-  const [subscriptionTrialActive, setSubscriptionTrialActive] = useState(false)
-  const [showFingerprintModal, setShowFingerprintModal] = useState(false)
-  const [pendingCheckInType, setPendingCheckInType] = useState<"check-in" | "check-out" | null>(null)
   const [enabledCheckInMethods, setEnabledCheckInMethods] = useState({
     qrCode: true,
     manualEntry: true,
@@ -56,8 +45,6 @@ export default function CheckInPage() {
   // Toast notifications
   const { toast } = useToast()
   
-  // Payment hook
-  const { initiateUpgradePayment, loading: paymentLoading } = useSubscriptionPayment()
 
   // Use custom hook for check-in logic
   const {
@@ -71,69 +58,38 @@ export default function CheckInPage() {
     handleCheckIn: handleCheckInLogic,
     clearMessages,
     resetAttendanceStatus,
-  } = useCheckin(tenantId)
+  } = useCheckin(checkInToken)
+
+  const availableMethods = [
+    { value: "manual", label: "Manual", hint: "Enter your Staff ID", Icon: User, enabled: enabledCheckInMethods.manualEntry },
+    { value: "qr", label: "QR Code", hint: "Scan your QR code", Icon: QrCode, enabled: enabledCheckInMethods.qrCode },
+    { value: "face", label: "Face", hint: "Look at the camera to check in", Icon: ScanFace, enabled: enabledCheckInMethods.faceRecognition },
+  ].filter((m) => m.enabled)
+
+  // Enable the configured methods and open the first one that is allowed
+  const applyEnabledMethods = (methods: { qrCode: boolean; manualEntry: boolean; faceRecognition: boolean }) => {
+    setEnabledCheckInMethods(methods)
+    if (methods.manualEntry) setActiveTab("manual")
+    else if (methods.qrCode) setActiveTab("qr")
+    else if (methods.faceRecognition) setActiveTab("face")
+  }
 
   // Simplified handlers
-  const handleUnlock = (data: { 
-    tenantId: string; 
-    organizationName: string; 
-    capturePhotos: boolean; 
-    fingerprintEnabled?: boolean; 
-    isInTrial?: boolean;
+  const handleUnlock = (data: {
+    checkInToken: string;
+    tenantId: string;
+    organizationName: string;
+    capturePhotos: boolean;
     enabledCheckInMethods?: {
       qrCode: boolean;
       manualEntry: boolean;
       faceRecognition: boolean;
     }
   }) => {
-    setTenantId(data.tenantId)
+    setCheckInToken(data.checkInToken)
     setOrganizationName(data.organizationName)
-    
-    // Fetch subscription status to check feature access (include token in prod)
-    ;(async () => {
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
-        const headers: Record<string, string> = {}
-        if (token) headers["Authorization"] = `Bearer ${token}`
-
-        const res = await fetch("/api/subscription/status", { headers })
-        if (res.ok) {
-          const subData = await res.json()
-          setSubscriptionPlan(subData.plan || "starter")
-          setSubscriptionTrialActive(subData.isTrialActive || false)
-
-          // During 14-day trial, ALL features are available
-          // After trial ends, features are locked based on plan
-          const isDev = process.env.NODE_ENV === "development"
-          const isInTrialPeriod = subData.plan === "starter" && subData.isTrialActive
-          
-          // Photo verification: Available in trial, professional, and enterprise
-          const canUsePhoto = isDev || isInTrialPeriod || subData.plan === "professional" || subData.plan === "enterprise"
-          
-          // Fingerprint verification: Available in trial and enterprise
-          const canUseFingerprint = isDev || isInTrialPeriod || subData.plan === "enterprise"
-
-          setCapturePhotos(!!(data.capturePhotos && canUsePhoto))
-          setFingerprintEnabled(!!(data.fingerprintEnabled && canUseFingerprint))
-        } else {
-          // If status endpoint returned non-OK, fall back conservatively
-          const isDev = process.env.NODE_ENV === "development"
-          setCapturePhotos(isDev ? data.capturePhotos : false)
-          setFingerprintEnabled(isDev ? !!data.fingerprintEnabled : false)
-        }
-      } catch (err) {
-        // Fallback if subscription check fails - disable gated features for security
-        const isDev = process.env.NODE_ENV === "development"
-        setCapturePhotos(isDev ? data.capturePhotos : false)
-        setFingerprintEnabled(isDev ? !!data.fingerprintEnabled : false)
-        if (!isDev && typeof document !== 'undefined') {
-          console.warn('Unable to verify subscription status - some features disabled for security')
-        }
-      }
-    })()
-    
-    setIsInTrial(data.isInTrial || false)
-    setEnabledCheckInMethods(data.enabledCheckInMethods || {
+    setCapturePhotos(!!data.capturePhotos)
+    applyEnabledMethods(data.enabledCheckInMethods || {
       qrCode: true,
       manualEntry: true,
       faceRecognition: false,
@@ -187,6 +143,7 @@ export default function CheckInPage() {
 
       // Update state
       setStaffId(finalStaffId)
+      setQrPayload(scannedId.trim())
       setShowScanner(false)
       setScannerKey((prev) => prev + 1)
       toast({
@@ -220,37 +177,6 @@ export default function CheckInPage() {
     }
   }
 
-  const handleBiometricScan = async (scannedStaffId: string) => {
-    setStaffId(scannedStaffId)
-    
-    // Check attendance status first
-    await checkAttendanceStatus(scannedStaffId)
-    
-    // Wait a bit for status to update
-    setTimeout(async () => {
-      // Automatically check in or out based on current status
-      if (attendanceStatus?.hasCheckedOut) {
-        // Already completed for today
-        toast({
-          title: "Already Completed",
-          description: "You have already checked in and out for today.",
-        })
-      } else if (attendanceStatus?.hasCheckedIn) {
-        // Check out
-        await handleCheckInLogic(scannedStaffId, "check-out", capturePhotos, "fingerprint")
-      } else {
-        // Check in
-        await handleCheckInLogic(scannedStaffId, "check-in", capturePhotos, "fingerprint")
-      }
-      
-      // Reset for next user
-      setTimeout(() => {
-        setStaffId("")
-        resetAttendanceStatus()
-      }, 3000)
-    }, 500)
-  }
-
   const handleCloseScanner = async () => {
     console.log("Closing QR scanner...")
     setScannerClosing(true)
@@ -277,6 +203,7 @@ export default function CheckInPage() {
     // Then update state
     setShowScanner(false)
     setStaffId("")
+    setQrPayload("")
     setShowQRSuccess(false)
     setScannerClosing(false)
     resetAttendanceStatus()
@@ -285,88 +212,17 @@ export default function CheckInPage() {
     console.log("QR scanner closed successfully")
   }
 
-  // Check if fingerprint verification is required
-  const requiresFingerprintVerification = async (staffIdToCheck: string): Promise<{ hasFingerprint: boolean; error?: string }> => {
-    try {
-      const response = await fetch("/api/biometric/fingerprint/credentials", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffId: staffIdToCheck, tenantId }),
-      })
-      
-      if (response.ok) {
-        const { credentials, hasFingerprint } = await response.json()
-        return { hasFingerprint: hasFingerprint || (credentials && credentials.length > 0) }
-      }
-      
-      // If 404 or other error, assume no fingerprint
-      return { hasFingerprint: false }
-    } catch (error) {
-      console.error("Error checking fingerprint:", error)
-      return { hasFingerprint: false }
-    }
-  }
+  const handleCheckIn = async (
+    type: "check-in" | "check-out",
+    options: { staffId?: string; method?: string; proofs?: string[]; photo?: string } = {}
+  ): Promise<boolean | "pending"> => {
+    const id = options.staffId ?? staffId
+    const method = options.method ?? activeTab
+    const proofs = options.proofs ?? []
+    const photo = options.photo
+    const qrData = method === "qr" ? qrPayload : undefined
 
-  // Simple handlers
-  const handleCheckIn = async (type: "check-in" | "check-out") => {
-    console.log("=== CHECK-IN DEBUG ===")
-    console.log("fingerprintEnabled:", fingerprintEnabled)
-    
-    // Check if fingerprint is locked by subscription
-    const isDev = process.env.NODE_ENV === "development"
-    const isInTrialPeriod = subscriptionPlan === "starter" && subscriptionTrialActive
-    
-    // Fingerprint check: Only available in trial period or enterprise plan
-    if (fingerprintEnabled && !isDev && !isInTrialPeriod && subscriptionPlan !== "enterprise") {
-      setUpgradeFeature("fingerprintCheckIn")
-      setShowUpgradePopup(true)
-      return
-    }
-    
-    // Photo verification check: Available in trial, professional, or enterprise
-    if (capturePhotos && !isDev) {
-      const canUsePhoto = isInTrialPeriod || subscriptionPlan === "professional" || subscriptionPlan === "enterprise"
-      if (!canUsePhoto) {
-        setUpgradeFeature("photoVerification")
-        setShowUpgradePopup(true)
-        return
-      }
-    }
-    
-    // Only require fingerprint if explicitly enabled in settings
-    if (fingerprintEnabled) {
-      console.log("Fingerprint verification is enabled - checking registration...")
-      const { hasFingerprint } = await requiresFingerprintVerification(staffId)
-      console.log("Staff has fingerprint registered:", hasFingerprint)
-      
-      if (hasFingerprint) {
-        // Staff has fingerprint registered - show verification modal
-        console.log("Showing fingerprint modal")
-        setPendingCheckInType(type)
-        setShowFingerprintModal(true)
-        return
-      } else {
-        // Staff has NO fingerprint registered - block them
-        console.log("Blocking - no fingerprint registered")
-        toast({
-          variant: "destructive",
-          title: "Fingerprint Not Registered",
-          description: "Fingerprint verification is required. Please contact your administrator to register your fingerprint on this device.",
-        })
-        return
-      }
-    }
-    
-    // Fingerprint not required - proceed normally
-    console.log("Proceeding with check-in (no fingerprint required)")
-    handleCheckInLogic(staffId, type, capturePhotos, activeTab)
-  }
-
-  const handleFingerprintSuccess = () => {
-    if (pendingCheckInType) {
-      handleCheckInLogic(staffId, pendingCheckInType, capturePhotos, activeTab)
-      setPendingCheckInType(null)
-    }
+    return await handleCheckInLogic(id, type, capturePhotos, method, proofs, photo, qrData)
   }
 
   const handleTabChange = async (value: string) => {
@@ -420,6 +276,7 @@ export default function CheckInPage() {
       setShowScanner(false)
       setShowQRSuccess(false)
       setStaffId("")
+      setQrPayload("")
       resetAttendanceStatus()
       clearMessages()
       setMessage("")
@@ -435,45 +292,35 @@ export default function CheckInPage() {
   const handleResetQRSuccess = () => {
     setShowQRSuccess(false)
     setStaffId("")
+    setQrPayload("")
     resetAttendanceStatus()
     clearMessages()
   }
 
   // Session management
   React.useEffect(() => {
-    const storedTenantId = sessionStorage.getItem("checkInTenantId")
+    const storedToken = sessionStorage.getItem("checkInToken")
     const storedOrgName = sessionStorage.getItem("checkInOrgName")
     const storedCapturePhotos = sessionStorage.getItem("capturePhotos")
-    const storedFingerprintEnabled = sessionStorage.getItem("fingerprintEnabled")
-    const storedIsInTrial = sessionStorage.getItem("isInTrial")
     const storedEnabledMethods = sessionStorage.getItem("enabledCheckInMethods")
     const storedTimestamp = sessionStorage.getItem("settingsTimestamp")
 
     const isStale = storedTimestamp ?
       (getUTCDate().getTime() - parseInt(storedTimestamp)) > (5 * 60 * 1000) : true
 
-    if (storedTenantId && storedOrgName && !isStale) {
-      setTenantId(storedTenantId)
+    if (storedToken && storedOrgName && !isStale) {
+      setCheckInToken(storedToken)
       setOrganizationName(storedOrgName)
       setCapturePhotos(storedCapturePhotos === "true")
-      setFingerprintEnabled(storedFingerprintEnabled === "true")
-      setIsInTrial(storedIsInTrial === "true")
       if (storedEnabledMethods) {
         try {
-          const methods = JSON.parse(storedEnabledMethods)
-          setEnabledCheckInMethods(methods)
-          // Set default active tab to first enabled method
-          if (!methods.manualEntry && methods.qrCode) {
-            setActiveTab("qr")
-          } else if (!methods.manualEntry && !methods.qrCode && methods.faceRecognition) {
-            setActiveTab("face")
-          }
+          applyEnabledMethods(JSON.parse(storedEnabledMethods))
         } catch (e) {
           console.error("Failed to parse enabled methods:", e)
         }
       }
       setIsUnlocked(true)
-    } else if (isStale) {
+    } else {
       sessionStorage.clear()
     }
   }, [])
@@ -586,44 +433,9 @@ export default function CheckInPage() {
 
   return (
     <>
-      <Toaster />
-      
-      {/* Upgrade Modal */}
-      <UpgradeModal
-        isOpen={showUpgradePopup}
-        onClose={() => setShowUpgradePopup(false)}
-        onUpgrade={(plan: "professional" | "enterprise") => {
-          initiateUpgradePayment({
-            plan,
-            onSuccess: () => {
-              setShowUpgradePopup(false)
-            },
-            onError: (error) => {
-              toast({
-                variant: "destructive",
-                title: "Payment Error",
-                description: error,
-              })
-            },
-          })
-        }}
-        loading={paymentLoading}
-        feature={upgradeFeature === "fingerprintCheckIn" ? "Fingerprint Verification" : "Photo Verification"}
-        message={getFeatureGateMessage(upgradeFeature, subscriptionPlan)}
-        currentPlan={subscriptionPlan}
-        recommendedPlan={getRecommendedPlan(upgradeFeature)}
-      />
-      
-      <BiometricVerificationModal
-        open={showFingerprintModal}
-        onClose={() => setShowFingerprintModal(false)}
-        staffId={staffId}
-        tenantId={tenantId}
-        onSuccess={handleFingerprintSuccess}
-      />
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
-        <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} isInTrial={isInTrial} />
+        <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} />
 
         {success && lastAction && (
           <SuccessMessage lastAction={lastAction} />
@@ -632,90 +444,37 @@ export default function CheckInPage() {
         <Card className="min-h-[500px] border-0 shadow-xl">
           <CardHeader className="border-b bg-gray-50">
             <CardTitle className="text-2xl text-gray-900">Attendance Tracking</CardTitle>
-            <CardDescription className="text-gray-600">Choose your preferred check-in method</CardDescription>
+            <CardDescription className="text-gray-600">
+              {availableMethods.length > 1 ? "Choose your preferred check-in method" : availableMethods[0]?.hint}
+            </CardDescription>
           </CardHeader>
           <CardContent className="min-h-[400px] p-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 h-auto">
-                <div 
-                  className="relative"
-                  onClick={() => {
-                    if (!enabledCheckInMethods.manualEntry) {
-                      toast({
-                        variant: "destructive",
-                        title: "Method Disabled",
-                        description: "Manual Entry has been disabled by your administrator.",
-                      })
-                    }
-                  }}
+              {/* Only the methods the admin allows; no tab bar when there is just one */}
+              {availableMethods.length > 1 && (
+                <TabsList
+                  className={`grid w-full bg-gray-100 p-1 h-auto ${availableMethods.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}
                 >
-                  <TabsTrigger 
-                    value="manual" 
-                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
-                    disabled={!enabledCheckInMethods.manualEntry}
-                  >
-                    <User className="w-5 h-5 mr-2" />
-                    <span className="hidden sm:inline">Manual</span>
-                  </TabsTrigger>
-                  {!enabledCheckInMethods.manualEntry && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <Lock className="w-5 h-5 text-red-500" />
-                    </div>
-                  )}
+                  {availableMethods.map(({ value, label, Icon }) => (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
+                    >
+                      <Icon className="w-5 h-5 mr-2" />
+                      <span className="hidden sm:inline">{label}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              )}
+
+              {availableMethods.length === 0 && (
+                <div className="text-center py-16 text-gray-600">
+                  <Lock className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-lg font-medium">No check-in methods are available</p>
+                  <p className="text-sm mt-1">Ask your administrator to enable one in Settings → Check-In Methods.</p>
                 </div>
-                <div 
-                  className="relative"
-                  onClick={() => {
-                    if (!enabledCheckInMethods.qrCode) {
-                      toast({
-                        variant: "destructive",
-                        title: "Method Disabled",
-                        description: "QR Code has been disabled by your administrator.",
-                      })
-                    }
-                  }}
-                >
-                  <TabsTrigger 
-                    value="qr" 
-                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
-                    disabled={!enabledCheckInMethods.qrCode}
-                  >
-                    <QrCode className="w-5 h-5 mr-2" />
-                    <span className="hidden sm:inline">QR Code</span>
-                  </TabsTrigger>
-                  {!enabledCheckInMethods.qrCode && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <Lock className="w-5 h-5 text-red-500" />
-                    </div>
-                  )}
-                </div>
-                <div 
-                  className="relative"
-                  onClick={() => {
-                    if (!enabledCheckInMethods.faceRecognition) {
-                      toast({
-                        variant: "destructive",
-                        title: "Method Disabled",
-                        description: "Face Recognition has been disabled by your administrator.",
-                      })
-                    }
-                  }}
-                >
-                  <TabsTrigger 
-                    value="face" 
-                    className="data-[state=active]:bg-blue-600 data-[state=active]:text-white py-3 w-full"
-                    disabled={!enabledCheckInMethods.faceRecognition}
-                  >
-                    <ScanFace className="w-5 h-5 mr-2" />
-                    <span className="hidden sm:inline">Face</span>
-                  </TabsTrigger>
-                  {!enabledCheckInMethods.faceRecognition && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <Lock className="w-5 h-5 text-red-500" />
-                    </div>
-                  )}
-                </div>
-              </TabsList>
+              )}
 
               <TabsContent value="manual" className="space-y-4" data-tab="manual">
                 <ManualEntryTab
@@ -739,7 +498,12 @@ export default function CheckInPage() {
 
               <TabsContent value="face" className="space-y-4">
                 {activeTab === "face" && (
-                  <FaceRecognition mode="authenticate" onScan={handleBiometricScan} />
+                  <HandsFreeFace
+                    checkInToken={checkInToken}
+                    onCheckIn={({ staffId: id, type, proof, photo }) =>
+                      handleCheckIn(type, { staffId: id, method: "face", proofs: [proof], photo })
+                    }
+                  />
                 )}
               </TabsContent>
 

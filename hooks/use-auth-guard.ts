@@ -2,8 +2,13 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "@/hooks/use-toast"
 
+/**
+ * Loads the signed-in user and organization from the server (so settings
+ * changed elsewhere are picked up) and redirects to login when the session
+ * is missing, expired or deactivated.
+ */
 export const useAuthGuard = () => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
@@ -21,58 +26,35 @@ export const useAuthGuard = () => {
         throw new Error("No token found")
       }
 
-      // Verify token by making a request to the API
-      const response = await fetch("/api/auth/verify", {
+      const response = await fetch("/api/auth/me", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
+      const data = await response.json().catch(() => ({}))
+
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Session expired")
-        }
-        throw new Error("Authentication failed")
+        throw new Error(response.status === 401 || response.status === 403 ? data.error || "Session expired" : "Authentication failed")
       }
 
-      // Load user/org from localStorage if available
-      const userData = localStorage.getItem("user")
-      const orgData = localStorage.getItem("organization")
-      if (userData) {
-        try {
-          setUser(JSON.parse(userData))
-        } catch {
-          // ignore parse errors
-        }
-      }
-      if (orgData) {
-        try {
-          setOrganization(JSON.parse(orgData))
-        } catch {
-          // ignore parse errors
-        }
-      }
-
+      localStorage.setItem("user", JSON.stringify(data.user))
+      localStorage.setItem("organization", JSON.stringify(data.organization))
+      setUser(data.user)
+      setOrganization(data.organization)
       setIsLoading(false)
     } catch (err: any) {
       console.error("Auth check failed:", err)
-      // Clear any stored auth data
       localStorage.removeItem("accessToken")
       localStorage.removeItem("user")
       localStorage.removeItem("organization")
 
-      // Show appropriate message based on error
-      const message = err?.message === "Session expired"
-        ? "Your session has expired. Please login again."
-        : "Please login to continue."
-
       toast({
         title: "Authentication Required",
-        description: message,
+        description: err?.message === "No token found" ? "Please login to continue." : err?.message || "Please login again.",
         variant: "destructive",
       })
 
-      // Redirect to login with return URL
       const currentPath = typeof window !== "undefined" ? window.location.pathname : "/"
       router.push(`/login?returnUrl=${encodeURIComponent(currentPath)}`)
     }

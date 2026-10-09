@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { getIpAddress } from "@/lib/utils/request"
 import { withSuperAdminAuth } from "@/lib/auth/super-admin"
 import { getDatabase } from "@/lib/mongodb"
 import { SuperAdminError, createDatabaseError } from "@/lib/errors/super-admin-errors"
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         timestamp: new Date(),
       },
-      ipAddress: request.ip || request.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: getIpAddress(request),
       userAgent: request.headers.get("user-agent") || "unknown",
       timestamp: new Date(),
     })

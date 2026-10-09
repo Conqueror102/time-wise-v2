@@ -11,14 +11,16 @@ import {
   CreateCollectionCommand,
   ListCollectionsCommand,
 } from "@aws-sdk/client-rekognition"
+import type { FaceMatch } from "./compreface"
 
-// Initialize AWS Rekognition client
+export function isRekognitionConfigured(): boolean {
+  return !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
+}
+
+// Initialize AWS Rekognition client (null when credentials are missing)
 const getClient = () => {
-  const isDevelopment = process.env.NODE_ENV === "development"
-  
-  // In development, return mock client
-  if (isDevelopment && (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY)) {
-    return null // Will use fallback logic
+  if (!isRekognitionConfigured()) {
+    return null
   }
 
   return new RekognitionClient({
@@ -62,18 +64,23 @@ export async function ensureCollection(): Promise<boolean> {
 /**
  * Register a face in AWS Rekognition
  */
+/**
+ * Faces from every organization share one collection, so each face is tagged
+ * with its tenant and searches only accept matches from the caller's tenant.
+ */
+function toExternalImageId(tenantId: string, staffId: string): string {
+  return `${tenantId}__${staffId}`
+}
+
 export async function registerFace(
   imageBase64: string,
+  tenantId: string,
   staffId: string
 ): Promise<{ success: boolean; faceId?: string; error?: string }> {
   const client = getClient()
   
-  // Development fallback - use simple hash
   if (!client) {
-    return {
-      success: true,
-      faceId: `dev_face_${staffId}_${Date.now()}`,
-    }
+    return { success: false, error: "AWS Rekognition is not configured" }
   }
 
   try {
@@ -87,7 +94,7 @@ export async function registerFace(
       Image: {
         Bytes: imageBuffer,
       },
-      ExternalImageId: staffId,
+      ExternalImageId: toExternalImageId(tenantId, staffId),
       DetectionAttributes: ["ALL"],
       MaxFaces: 1,
       QualityFilter: "AUTO",
@@ -119,17 +126,13 @@ export async function registerFace(
  * Search for a face in AWS Rekognition
  */
 export async function searchFace(
-  imageBase64: string
-): Promise<{ success: boolean; staffId?: string; confidence?: number; error?: string }> {
+  imageBase64: string,
+  tenantId: string
+): Promise<FaceMatch> {
   const client = getClient()
   
-  // Development fallback - return mock result
   if (!client) {
-    return {
-      success: true,
-      staffId: "STAFF001", // Mock for development
-      confidence: 99.9,
-    }
+    return { success: false, error: "AWS Rekognition is not configured" }
   }
 
   try {
@@ -140,27 +143,44 @@ export async function searchFace(
       Image: {
         Bytes: imageBuffer,
       },
-      MaxFaces: 1,
-      FaceMatchThreshold: 80, // 80% confidence threshold
+      MaxFaces: 20,
+      FaceMatchThreshold: 90,
     })
 
     const response = await client.send(command)
 
+    const faceWidthRatio = response.SearchedFaceBoundingBox?.Width
+
     if (!response.FaceMatches || response.FaceMatches.length === 0) {
       return {
         success: false,
+        faceWidthRatio,
         error: "No matching face found",
       }
     }
 
-    const match = response.FaceMatches[0]
+    const prefix = toExternalImageId(tenantId, "")
+    const match = response.FaceMatches.find((m) => m.Face?.ExternalImageId?.startsWith(prefix))
+
+    if (!match) {
+      return {
+        success: false,
+        faceWidthRatio,
+        error: "No matching face found",
+      }
+    }
 
     return {
       success: true,
-      staffId: match.Face?.ExternalImageId,
+      staffId: match.Face!.ExternalImageId!.slice(prefix.length),
       confidence: match.Similarity,
+      faceWidthRatio,
     }
   } catch (error: any) {
+    // Rekognition reports "no face in the image" as an invalid parameter
+    if (error?.name === "InvalidParameterException") {
+      return { success: false, noFace: true, error: "No face detected. Face the camera in good light and try again." }
+    }
     console.error("Error searching face:", error)
     return {
       success: false,
@@ -174,7 +194,7 @@ export async function searchFace(
  */
 export async function deleteFace(faceId: string): Promise<boolean> {
   const client = getClient()
-  if (!client) return true // In development, always succeed
+  if (!client) return false
 
   try {
     const command = new DeleteFacesCommand({

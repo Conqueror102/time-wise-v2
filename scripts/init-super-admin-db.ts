@@ -4,7 +4,6 @@
  * 
  * This script creates the necessary collections and indexes for the super admin panel:
  * - system_audit_logs: Stores all administrative actions
- * - paystack_webhooks: Stores Paystack webhook events
  * - platform_stats_cache: Stores cached analytics with TTL
  * - Verifies and extends organizations collection
  * 

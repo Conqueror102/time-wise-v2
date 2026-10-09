@@ -1,145 +1,84 @@
 /**
  * Verify Organization Check-In Passcode
+ * On success returns a kiosk token that the check-in endpoints require,
+ * plus the organization's check-in policy.
  */
 
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { getDatabase } from "@/lib/mongodb"
+import { signKioskToken } from "@/lib/auth/checkin-tokens"
+import { getCheckInPolicy } from "@/lib/checkin/policy"
+import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
 
 export const dynamic = 'force-dynamic'
+
+function passcodesMatch(stored: string, provided: string): boolean {
+  const a = crypto.createHash("sha256").update(stored).digest()
+  const b = crypto.createHash("sha256").update(provided).digest()
+  return crypto.timingSafeEqual(a, b)
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { passcode, email } = await request.json()
 
-    if (!passcode || !email) {
+    if (!passcode || !email || typeof passcode !== "string" || typeof email !== "string") {
       return NextResponse.json(
         { error: "Email and passcode are required" },
         { status: 400 }
       )
     }
 
-    const db = await getDatabase()
     const normalizedEmail = email.toLowerCase().trim()
 
-    // Find organization by email - try multiple status values
-    let organization = await db.collection("organizations").findOne({
-      adminEmail: normalizedEmail,
-      status: "active",
-    })
+    const rateLimitResponse = await applyRateLimit(request, RateLimitPresets.CHECKIN_PASSCODE, normalizedEmail)
+    if (rateLimitResponse) return rateLimitResponse
 
-    // If not found with active status, try trial status
-    if (!organization) {
-      organization = await db.collection("organizations").findOne({
-        adminEmail: normalizedEmail,
-        status: "trial",
-      })
-    }
-
-    // If still not found, try without status filter
-    if (!organization) {
-      organization = await db.collection("organizations").findOne({
-        adminEmail: normalizedEmail,
-      })
-    }
+    const db = await getDatabase()
+    const organization = await db.collection("organizations").findOne({ adminEmail: normalizedEmail })
 
     if (!organization) {
-      // Debug: Check if any organizations exist
-      const allOrgs = await db.collection("organizations").find({}).limit(5).toArray()
-      console.log("Available organizations:", allOrgs.map(o => ({
-        email: o.adminEmail,
-        status: o.status,
-        name: o.name
-      })))
-
       return NextResponse.json(
-        {
-          error: "Organization not found with this email. Please check your email address.",
-          debug: process.env.NODE_ENV === "development" ? {
-            searchedEmail: normalizedEmail,
-            availableEmails: allOrgs.map(o => o.adminEmail)
-          } : undefined
-        },
+        { error: "Organization not found with this email. Please check your email address." },
         { status: 404 }
       )
     }
 
-    // Check if passcode is set
-    const storedPasscode = organization.settings?.checkInPasscode
+    if (organization.status === "suspended" || organization.status === "cancelled") {
+      return NextResponse.json(
+        { error: "This organization's account is not active. Please contact your administrator." },
+        { status: 403 }
+      )
+    }
 
-    // In development, allow empty passcode or match "1234" as default
+    const storedPasscode = organization.settings?.checkInPasscode
     const isDevelopment = process.env.NODE_ENV === "development"
 
     if (!storedPasscode) {
-      // No passcode set yet
-      if (isDevelopment && passcode === "1234") {
-        // Allow default passcode in development
-        return NextResponse.json({
-          success: true,
-          tenantId: organization._id.toString(),
-          organizationName: organization.name,
-          message: "Using default passcode (1234). Please set a passcode in Settings.",
-        })
+      // Allow a default passcode in development only
+      if (!(isDevelopment && passcode === "1234")) {
+        return NextResponse.json(
+          { error: "No passcode set. Admin must set a passcode in Settings first." },
+          { status: 400 }
+        )
       }
-
-      return NextResponse.json(
-        { error: "No passcode set. Admin must set a passcode in Settings first." },
-        { status: 400 }
-      )
+    } else if (!passcodesMatch(String(storedPasscode), passcode)) {
+      return NextResponse.json({ error: "Invalid passcode" }, { status: 401 })
     }
 
-    // Verify passcode matches
-    if (storedPasscode !== passcode) {
-      return NextResponse.json(
-        { error: "Invalid passcode" },
-        { status: 401 }
-      )
-    }
-
-    const capturePhotos = organization.settings?.capturePhotos || false
-    console.log("=== VERIFY PASSCODE DEBUG ===")
-    console.log("Organization found:", {
-      id: organization._id,
-      name: organization.name,
-      email: organization.adminEmail,
-    })
-    console.log("Full settings object:", organization.settings)
-    console.log("capturePhotos value:", {
-      raw: organization.settings?.capturePhotos,
-      type: typeof organization.settings?.capturePhotos,
-      final: capturePhotos
-    })
-    console.log("=== END DEBUG ===")
-
-    // Check if organization is in trial period
-    const isInTrial = organization.status === "trial" && 
-                      organization.trialEndsAt && 
-                      new Date(organization.trialEndsAt) > new Date()
-
-    // Check if on paid plan (professional or enterprise)
-    const isPaidPlan = organization.subscriptionTier === "professional" || 
-                       organization.subscriptionTier === "enterprise"
-
-    // Fingerprint enabled if: explicitly set in settings, OR on paid plan, OR in trial
-    const fingerprintEnabled = organization.settings?.fingerprintEnabled === true || 
-                                isPaidPlan || 
-                                isInTrial
-
-    // Get enabled check-in methods
-    const enabledCheckInMethods = organization.settings?.enabledCheckInMethods || {
-      qrCode: true,
-      manualEntry: true,
-      faceRecognition: false,
-    }
+    const tenantId = organization._id.toString()
+    const policy = getCheckInPolicy(organization)
 
     return NextResponse.json({
       success: true,
-      tenantId: organization._id.toString(),
+      checkInToken: signKioskToken(tenantId),
+      tenantId,
       organizationName: organization.name,
-      capturePhotos: capturePhotos || isInTrial, // Enable photo verification during trial
-      fingerprintEnabled: fingerprintEnabled, // Enabled by default on paid plans and trial
-      isInTrial,
-      subscriptionTier: organization.subscriptionTier,
-      enabledCheckInMethods,
+      // The kiosk takes a photo whenever the server needs one
+      capturePhotos: policy.requirePhoto,
+      enabledCheckInMethods: policy.enabledCheckInMethods,
+      ...(!storedPasscode && { message: "Using default passcode (1234). Please set a passcode in Settings." }),
     })
   } catch (error) {
     console.error("Verify passcode error:", error)

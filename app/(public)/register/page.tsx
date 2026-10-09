@@ -41,7 +41,10 @@ export default function RegisterPage() {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       })
 
       const data = await response.json()
@@ -72,7 +75,7 @@ export default function RegisterPage() {
             Create Your Organization
           </h1>
           <p className="text-gray-600">
-            Start your 14-day free trial. No credit card required.
+            TimeWise is free to use. No credit card required.
           </p>
         </div>
 

@@ -10,12 +10,13 @@ import { validateSubdomain, validateEmail, sanitizeOrganizationName } from "@/li
 import { RegisterOrganizationRequest, Organization, User, TenantError, ErrorCodes } from "@/lib/types"
 import { ObjectId } from "mongodb"
 import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
+import { DEFAULT_TIMEZONE, isValidTimeZone } from "@/lib/utils/date"
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   // Apply rate limiting
-  const rateLimitResponse = applyRateLimit(request, RateLimitPresets.AUTH_REGISTER)
+  const rateLimitResponse = await applyRateLimit(request, RateLimitPresets.AUTH_REGISTER)
   if (rateLimitResponse) return rateLimitResponse
   try {
     const body: RegisterOrganizationRequest = await request.json()
@@ -86,34 +87,24 @@ export async function POST(request: NextRequest) {
       name: sanitizeOrganizationName(name),
       subdomain: subdomain.toLowerCase(),
       adminEmail,
-      status: "trial",
-      subscriptionTier: "starter",
-      subscriptionStatus: "trial",
+      status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
       allowedMethods: ["qr", "manual"],
       settings: {
         latenessTime: "09:00",
         workStartTime: "09:00",
         workEndTime: "17:00",
-        maxStaff: 10,
         allowedMethods: ["qr", "manual"],
-        timezone: "UTC",
+        timezone: isValidTimeZone(body.timezone) ? body.timezone : DEFAULT_TIMEZONE,
         // Photo settings default: capture disabled, retention fixed at 7 days
         capturePhotos: false,
         photoRetentionDays: 7,
-        // Fingerprint disabled by default for starter accounts
-        fingerprintEnabled: false,
       },
     }
 
     const orgResult = await db.collection("organizations").insertOne(organization)
     const organizationId = orgResult.insertedId.toString()
-
-    // Create subscription record
-    const { createTrialSubscription } = await import("@/lib/subscription/subscription-manager")
-    await createTrialSubscription(organizationId)
 
     // Create admin user
     const adminUser: Omit<User, "_id"> = {

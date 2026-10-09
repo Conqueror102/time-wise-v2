@@ -4,9 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { getIpAddress } from "@/lib/utils/request"
 import { getDatabase } from "@/lib/mongodb"
 import { comparePassword } from "@/lib/auth/password"
 import { generateSuperAdminToken } from "@/lib/auth/super-admin"
+import { applyRateLimit, RateLimitPresets } from "@/lib/middleware/rate-limit"
 import {
   SuperAdminError,
   createInvalidCredentialsError,
@@ -17,6 +19,9 @@ import {
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await applyRateLimit(request, RateLimitPresets.AUTH_LOGIN, "owner")
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
     // Parse request body
     const body = await request.json()
@@ -86,7 +91,7 @@ export async function POST(request: NextRequest) {
         timestamp: new Date(),
         success: true,
       },
-      ipAddress: request.ip || request.headers.get("x-forwarded-for") || "unknown",
+      ipAddress: getIpAddress(request),
       userAgent: request.headers.get("user-agent") || "unknown",
       timestamp: new Date(),
     })

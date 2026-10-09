@@ -8,15 +8,16 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Authenticate super admin
     const context = await withSuperAdminAuth(request)
 
     // Get organization details
     const orgService = new OrganizationService()
-    const details = await orgService.getOrganizationDetails(params.id)
+    const details = await orgService.getOrganizationDetails(id)
 
     // Log action
     const auditService = new AuditService()
@@ -24,13 +25,15 @@ export async function GET(
       actorId: context.userId,
       actorEmail: context.email,
       action: "VIEW_ORGANIZATIONS",
-      tenantId: params.id,
+      tenantId: id,
       metadata: { action: "view_details" },
       ipAddress: getIpAddress(request),
       userAgent: getUserAgent(request),
     })
 
-    return NextResponse.json(details)
+    // The details page reads organization fields at the top level
+    const { organization, ...rest } = details
+    return NextResponse.json({ ...organization, _id: organization._id.toString(), ...rest })
   } catch (error: any) {
     console.error("Get organization details error:", error)
     return NextResponse.json(

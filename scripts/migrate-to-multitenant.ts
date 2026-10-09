@@ -36,8 +36,6 @@ async function migrate() {
         subdomain: "legacy",
         adminEmail: "admin@legacy.local",
         status: "active" as const,
-        subscriptionTier: "free" as const,
-        subscriptionStatus: "active" as const,
         createdAt: new Date(),
         updatedAt: new Date(),
         settings: {

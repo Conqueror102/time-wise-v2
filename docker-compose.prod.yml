@@ -1,0 +1,29 @@
+# Production overrides: HTTPS via Caddy on your domain.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile face up -d --build
+# Requires DOMAIN in .env and the domain's DNS A record pointing at this server.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  app:
+    # Only reachable through Caddy
+    ports: !reset []
+    environment:
+      NEXT_PUBLIC_APP_URL: https://${DOMAIN}
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -22,7 +22,6 @@ export const getAuthErrorMessage = (code?: ErrorCodes, defaultMessage: string = 
     [ErrorCodes.EMAIL_NOT_VERIFIED]: "Email not verified. Please check your inbox for verification email",
     [ErrorCodes.ACCOUNT_DEACTIVATED]: "Your account has been deactivated. Please contact support",
     [ErrorCodes.ACCOUNT_LOCKED]: "Your account has been locked. Please contact support",
-    [ErrorCodes.SUBSCRIPTION_EXPIRED]: "Your organization's subscription has expired",
     [ErrorCodes.RATE_LIMIT_EXCEEDED]: "Too many login attempts. Please try again later",
     [ErrorCodes.SERVICE_UNAVAILABLE]: "Service is temporarily unavailable. Please try again later",
     [ErrorCodes.TOKEN_EXPIRED]: "Your session has expired. Please log in again",

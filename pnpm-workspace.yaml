@@ -1,0 +1,6 @@
+allowBuilds:
+  '@mongodb-js/zstd': set this to true or false
+  kerberos: set this to true or false
+  mongodb-client-encryption: set this to true or false
+  sharp: set this to true or false
+  unrs-resolver: set this to true or false

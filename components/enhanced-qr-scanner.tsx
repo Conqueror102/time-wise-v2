@@ -80,7 +80,7 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
           if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
             scannerRef.current.stop().catch(console.warn)
           }
-          scannerRef.current.clear().catch(console.warn)
+          scannerRef.current.clear()
         } catch (err) {
           console.warn("Unmount cleanup error:", err)
         }
@@ -137,7 +137,7 @@ export function EnhancedQRScanner({ onScan, onClose }: EnhancedQRScannerProps) {
         console.log(`Processing video element ${index}:`, video)
         try {
           // Pause the video (suppress AbortError)
-          video.pause().catch(() => {})
+          video.pause()
           
           // Stop all tracks from srcObject
           if (video.srcObject) {

@@ -1,15 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getUTCDate } from "@/lib/utils/date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, CheckCircle2, XCircle, AlertCircle, Database, Mail, CreditCard, Activity } from "lucide-react"
+import { RefreshCw, CheckCircle2, XCircle, AlertCircle, Database, Mail, Activity, MinusCircle } from "lucide-react"
 
 interface HealthStatus {
   service: string
-  status: "healthy" | "degraded" | "down"
+  status: "healthy" | "degraded" | "down" | "not_configured"
   responseTime?: number
   lastChecked: string
   message?: string
@@ -19,6 +18,7 @@ export default function HealthPage() {
   const [healthData, setHealthData] = useState<HealthStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     fetchHealthData()
@@ -28,51 +28,18 @@ export default function HealthPage() {
   }, [])
 
   const fetchHealthData = async () => {
-    if (!loading) setRefreshing(true)
-    
+    setRefreshing(true)
     try {
-      // Simulate health check (you'll need to create actual API endpoint)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      
-      setHealthData([
-        {
-          service: "MongoDB Database",
-          status: "healthy",
-          responseTime: 15,
-          lastChecked: getUTCDate().toISOString(),
-          message: "All connections active",
-        },
-        {
-          service: "Paystack API",
-          status: "healthy",
-          responseTime: 234,
-          lastChecked: getUTCDate().toISOString(),
-          message: "Payment gateway operational",
-        },
-        {
-          service: "Resend Email Service",
-          status: "healthy",
-          responseTime: 145,
-          lastChecked: getUTCDate().toISOString(),
-          message: "Email delivery normal",
-        },
-        {
-          service: "AWS Rekognition",
-          status: "healthy",
-          responseTime: 567,
-          lastChecked: getUTCDate().toISOString(),
-          message: "Face verification available",
-        },
-        {
-          service: "Paystack Webhooks",
-          status: "healthy",
-          responseTime: 0,
-          lastChecked: getUTCDate().toISOString(),
-          message: "Last webhook received 2m ago",
-        },
-      ])
-    } catch (error) {
-      console.error("Failed to fetch health data:", error)
+      const token = localStorage.getItem("super_admin_token")
+      const response = await fetch("/api/owner/health", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to check system health")
+      setHealthData(data.services)
+      setError("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to check system health")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -87,6 +54,8 @@ export default function HealthPage() {
         return <AlertCircle className="h-5 w-5 text-yellow-600" />
       case "down":
         return <XCircle className="h-5 w-5 text-red-600" />
+      case "not_configured":
+        return <MinusCircle className="h-5 w-5 text-gray-500" />
       default:
         return <Activity className="h-5 w-5 text-gray-600" />
     }
@@ -100,6 +69,8 @@ export default function HealthPage() {
         return <Badge className="bg-yellow-100 text-yellow-800">Degraded</Badge>
       case "down":
         return <Badge variant="destructive">Down</Badge>
+      case "not_configured":
+        return <Badge variant="secondary">Not configured</Badge>
       default:
         return <Badge variant="secondary">Unknown</Badge>
     }
@@ -108,11 +79,11 @@ export default function HealthPage() {
   const getServiceIcon = (service: string) => {
     if (service.includes("MongoDB")) return <Database className="h-6 w-6" />
     if (service.includes("Email")) return <Mail className="h-6 w-6" />
-    if (service.includes("Paystack")) return <CreditCard className="h-6 w-6" />
     return <Activity className="h-6 w-6" />
   }
 
-  const allHealthy = healthData.every((h) => h.status === "healthy")
+  // Unconfigured optional services are not failures
+  const allHealthy = !error && healthData.every((h) => h.status === "healthy" || h.status === "not_configured")
 
   return (
     <div className="space-y-6">
@@ -150,73 +121,16 @@ export default function HealthPage() {
                 {allHealthy ? "All Systems Operational" : "Some Issues Detected"}
               </h3>
               <p className="text-sm text-gray-600">
-                {allHealthy
-                  ? "All services are running normally"
-                  : "Some services are experiencing issues"}
+                {error
+                  ? error
+                  : allHealthy
+                    ? "Every configured service is responding"
+                    : "Some services are experiencing issues"}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* System Metrics */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-full bg-green-100 p-3">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Uptime</p>
-                <p className="text-2xl font-bold">99.9%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-full bg-blue-100 p-3">
-                <Activity className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Avg Response</p>
-                <p className="text-2xl font-bold">124ms</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-full bg-purple-100 p-3">
-                <Database className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">DB Connections</p>
-                <p className="text-2xl font-bold">47/100</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-full bg-red-100 p-3">
-                <XCircle className="h-6 w-6 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Error Rate</p>
-                <p className="text-2xl font-bold">0.1%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Service Status */}
       <Card>
@@ -280,19 +194,6 @@ export default function HealthPage() {
         </CardContent>
       </Card>
 
-      {/* Recent Incidents */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Incidents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />
-            <p>No recent incidents</p>
-            <p className="text-sm mt-1">All systems have been running smoothly</p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

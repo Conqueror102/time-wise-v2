@@ -7,6 +7,7 @@ import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { withAuth } from "@/lib/auth"
 import { TenantError } from "@/lib/types"
+import { isValidTimeZone } from "@/lib/utils/date"
 
 export const dynamic = 'force-dynamic'
 
@@ -25,19 +26,27 @@ export async function PATCH(request: NextRequest) {
       timezone,
       checkInPasscode,
       capturePhotos,
+      verifyFaceOnIdCheckIn,
       // photoRetentionDays removed - retention is fixed to 7 days by default
-      fingerprintEnabled,
       enabledCheckInMethods,
     } = body
 
     const db = await getDatabase()
 
-    console.log("=== SETTINGS UPDATE DEBUG ===")
-    console.log("Request body:", body)
-    console.log("capturePhotos from body:", {
-      value: capturePhotos,
-      type: typeof capturePhotos
-    })
+
+    if (timezone !== undefined && !isValidTimeZone(timezone)) {
+      return NextResponse.json(
+        { error: "Invalid timezone. Use an IANA name such as Africa/Lagos or Europe/London." },
+        { status: 400 }
+      )
+    }
+
+    if (checkInPasscode !== undefined && checkInPasscode !== "" && !/^[A-Za-z0-9]{4,32}$/.test(String(checkInPasscode))) {
+      return NextResponse.json(
+        { error: "Check-in passcode must be 4-32 letters or digits" },
+        { status: 400 }
+      )
+    }
 
     // Build update object
     const updateData: any = {}
@@ -48,12 +57,10 @@ export async function PATCH(request: NextRequest) {
     if (timezone !== undefined) updateData["settings.timezone"] = timezone
     if (checkInPasscode !== undefined) updateData["settings.checkInPasscode"] = checkInPasscode
     if (capturePhotos !== undefined) updateData["settings.capturePhotos"] = capturePhotos
+    if (verifyFaceOnIdCheckIn !== undefined) updateData["settings.verifyFaceOnIdCheckIn"] = verifyFaceOnIdCheckIn === true
     // Intentionally ignore photoRetentionDays updates; retention is fixed at 7 days
-    if (fingerprintEnabled !== undefined) updateData["settings.fingerprintEnabled"] = fingerprintEnabled
     if (enabledCheckInMethods !== undefined) updateData["settings.enabledCheckInMethods"] = enabledCheckInMethods
 
-    console.log("Update data being saved:", updateData)
-    console.log("=== END SETTINGS DEBUG ===")
 
     // Update organization settings
     await db.collection("organizations").updateOne(
@@ -66,13 +73,6 @@ export async function PATCH(request: NextRequest) {
       .collection("organizations")
       .findOne({ _id: new ObjectId(context.tenantId) })
 
-    console.log("=== AFTER UPDATE ===")
-    console.log("Updated organization settings:", organization?.settings)
-    console.log("capturePhotos after save:", {
-      value: organization?.settings?.capturePhotos,
-      type: typeof organization?.settings?.capturePhotos
-    })
-    console.log("=== END AFTER UPDATE ===")
 
     return NextResponse.json({
       success: true,

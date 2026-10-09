@@ -1,6 +1,6 @@
 /**
  * Database initialization script for Super Admin collections
- * Creates collections and indexes for system_audit_logs, paystack_webhooks, and platform_stats_cache
+ * Creates collections and indexes for system_audit_logs and platform_stats_cache
  */
 
 import { Db } from "mongodb"
@@ -17,8 +17,6 @@ export async function initSuperAdminCollections(db?: Db): Promise<void> {
   // Create system_audit_logs collection and indexes
   await initAuditLogsCollection(database)
 
-  // Create paystack_webhooks collection and indexes
-  await initPaystackWebhooksCollection(database)
 
   // Create platform_stats_cache collection and indexes
   await initPlatformStatsCacheCollection(database)
@@ -71,47 +69,6 @@ async function initAuditLogsCollection(db: Db): Promise<void> {
   // Index on action for filtering by action type
   await collection.createIndex({ action: 1 }, { name: "action" })
   console.log(`✅ Created index: ${collectionName}.action`)
-}
-
-/**
- * Initialize paystack_webhooks collection
- * Stores all Paystack webhook events for audit and debugging
- */
-async function initPaystackWebhooksCollection(db: Db): Promise<void> {
-  const collectionName = "paystack_webhooks"
-
-  // Check if collection exists
-  const collections = await db.listCollections({ name: collectionName }).toArray()
-  const exists = collections.length > 0
-
-  if (!exists) {
-    await db.createCollection(collectionName)
-    console.log(`✅ Created collection: ${collectionName}`)
-  } else {
-    console.log(`ℹ️  Collection already exists: ${collectionName}`)
-  }
-
-  // Create indexes
-  const collection = db.collection(collectionName)
-
-  // Index on timestamp for chronological queries (descending for recent-first)
-  await collection.createIndex({ timestamp: -1 }, { name: "timestamp_desc" })
-  console.log(`✅ Created index: ${collectionName}.timestamp_desc`)
-
-  // Compound index on tenantId and timestamp for tenant-specific queries
-  await collection.createIndex(
-    { tenantId: 1, timestamp: -1 },
-    { name: "tenantId_timestamp", sparse: true } // sparse because tenantId is optional
-  )
-  console.log(`✅ Created index: ${collectionName}.tenantId_timestamp`)
-
-  // Index on event type for filtering by webhook event
-  await collection.createIndex({ event: 1 }, { name: "event" })
-  console.log(`✅ Created index: ${collectionName}.event`)
-
-  // Index on reference for quick lookup by transaction reference
-  await collection.createIndex({ reference: 1 }, { name: "reference" })
-  console.log(`✅ Created index: ${collectionName}.reference`)
 }
 
 /**
@@ -187,14 +144,6 @@ async function verifyOrganizationsCollection(db: Db): Promise<void> {
   // Index on subdomain (should already exist as unique, but verify)
   await collection.createIndex({ subdomain: 1 }, { name: "subdomain", unique: true })
   console.log(`✅ Verified unique index: ${collectionName}.subdomain`)
-
-  // Index on subscriptionTier for filtering
-  await collection.createIndex({ subscriptionTier: 1 }, { name: "subscriptionTier" })
-  console.log(`✅ Created index: ${collectionName}.subscriptionTier`)
-
-  // Index on subscriptionStatus for filtering
-  await collection.createIndex({ subscriptionStatus: 1 }, { name: "subscriptionStatus" })
-  console.log(`✅ Created index: ${collectionName}.subscriptionStatus`)
 }
 
 /**
@@ -206,7 +155,7 @@ export async function dropSuperAdminCollections(db?: Db): Promise<void> {
 
   console.log("⚠️  Dropping super admin collections...")
 
-  const collections = ["system_audit_logs", "paystack_webhooks", "platform_stats_cache"]
+  const collections = ["system_audit_logs", "platform_stats_cache"]
 
   for (const collectionName of collections) {
     try {

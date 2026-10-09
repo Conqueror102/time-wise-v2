@@ -7,9 +7,10 @@ export const dynamic = 'force-dynamic'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Authenticate super admin
     const context = await withSuperAdminAuth(request)
 
@@ -20,7 +21,7 @@ export async function DELETE(
     // Delete organization
     const orgService = new OrganizationService()
     await orgService.deleteOrganization(
-      params.id,
+      id,
       context.userId,
       context.email,
       getIpAddress(request),

@@ -4,7 +4,7 @@
  */
 
 /**
- * Check if a string is a URL (Cloudinary) or base64
+ * Check if a string is a URL (Cloudinary, or a local /api/photos link) or base64
  * @param imageString - Image string to check
  * @returns true if URL, false if base64
  */
@@ -13,7 +13,7 @@ export function isImageUrl(imageString: string): boolean {
   return (
     imageString.startsWith("http://") ||
     imageString.startsWith("https://") ||
-    imageString.startsWith("//")
+    imageString.startsWith("/")
   )
 }
 

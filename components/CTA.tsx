@@ -17,12 +17,12 @@ const CTA: React.FC = () => {
           Join hundreds of organizations already using TimeWise to streamline their workforce management.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="px-8 py-4 bg-white text-[#2563eb] rounded-full font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl">
-            Start Your Free Trial
-          </button>
-          <button className="px-8 py-4 bg-[#1d4ed8] text-white rounded-full font-bold text-lg hover:bg-[#1e40af] transition-colors border border-[#3b82f6]">
+          <a href="/register" className="px-8 py-4 bg-white text-[#2563eb] rounded-full font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl">
+            Get Started Free
+          </a>
+          <a href="/contact" className="px-8 py-4 bg-[#1d4ed8] text-white rounded-full font-bold text-lg hover:bg-[#1e40af] transition-colors border border-[#3b82f6]">
             Book a Demo
-          </button>
+          </a>
         </div>
       </div>
     </section>

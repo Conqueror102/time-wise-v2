@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { AnalyticsError } from "@/components/analytics/analytics-error"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Line, Bar } from "react-chartjs-2"
 import {
@@ -35,31 +36,7 @@ interface AttendanceTrendsProps {
 }
 
 export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTrendsProps) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchTrends()
-  }, [timeRange])
-
-  const fetchTrends = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch(`/api/analytics/trends?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const result = await response.json()
-      setData(result)
-    } catch (error) {
-      console.error("Failed to fetch trends:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const { data, loading, error } = useAnalytics<any>("/api/analytics/trends", timeRange)
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -81,6 +58,10 @@ export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTren
         </Card>
       </div>
     )
+  }
+
+  if (error) {
+    return <AnalyticsError message={error} />
   }
 
   const lineChartData = {
@@ -137,7 +118,7 @@ export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTren
           padding: 15,
           font: {
             size: 12,
-            weight: "500",
+            weight: 500,
           },
         },
       },
@@ -146,7 +127,7 @@ export function AttendanceTrends({ timeRange, detailed = false }: AttendanceTren
         padding: 12,
         titleFont: {
           size: 14,
-          weight: "600",
+          weight: 600,
         },
         bodyFont: {
           size: 13,

@@ -1,6 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useAnalytics } from "@/hooks/use-analytics"
+import { AnalyticsError } from "@/components/analytics/analytics-error"
+import { toCsv, downloadCsv } from "@/lib/utils/csv"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,35 +15,13 @@ interface StaffPerformanceProps {
 }
 
 export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading, error } = useAnalytics<any>("/api/analytics/staff", timeRange)
   const [searchTerm, setSearchTerm] = useState("")
 
-  useEffect(() => {
-    fetchStaffData()
-  }, [timeRange])
-
-  const fetchStaffData = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch(`/api/analytics/staff?range=${timeRange}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const result = await response.json()
-      setData(result)
-    } catch (error) {
-      console.error("Failed to fetch staff data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const filteredStaff = data?.staff?.filter((s: any) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.staffId.toLowerCase().includes(searchTerm.toLowerCase())
+    [s.name, s.staffId, s.department].some((field: string) =>
+      (field || "").toLowerCase().includes(searchTerm.toLowerCase())
+    )
   )
 
   if (loading) {
@@ -56,6 +37,10 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
     )
   }
 
+  if (error) {
+    return <AnalyticsError message={error} />
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Performers */}
@@ -65,7 +50,7 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Best Attendance</p>
-                <p className="text-xl font-bold text-gray-900">{data?.topPerformers?.attendance?.name}</p>
+                <p className="text-xl font-bold text-gray-900">{data?.topPerformers?.attendance?.name ?? "No attendance yet"}</p>
                 <p className="text-sm text-gray-600">{data?.topPerformers?.attendance?.staffId}</p>
               </div>
               <div className="p-2 rounded-lg bg-blue-600">
@@ -91,7 +76,7 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Most Punctual</p>
-                <p className="text-xl font-bold text-gray-900">{data?.topPerformers?.punctual?.name}</p>
+                <p className="text-xl font-bold text-gray-900">{data?.topPerformers?.punctual?.name ?? "No attendance yet"}</p>
                 <p className="text-sm text-gray-600">{data?.topPerformers?.punctual?.staffId}</p>
               </div>
               <div className="p-2 rounded-lg bg-green-600">
@@ -117,7 +102,7 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Needs Attention</p>
-                <p className="text-xl font-bold text-gray-900">{data?.needsAttention?.name}</p>
+                <p className="text-xl font-bold text-gray-900">{data?.needsAttention?.name ?? "Nobody"}</p>
                 <p className="text-sm text-gray-600">{data?.needsAttention?.staffId}</p>
               </div>
               <div className="p-2 rounded-lg bg-orange-600">
@@ -125,7 +110,7 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
               </div>
             </div>
             <p className="text-sm text-orange-600 font-medium">
-              {data?.needsAttention?.lateCount} late arrivals
+              {data?.needsAttention ? `${data.needsAttention.lateCount} late arrivals` : "No late arrivals in this period"}
             </p>
           </CardContent>
         </Card>
@@ -149,7 +134,22 @@ export function StaffPerformance({ timeRange }: StaffPerformanceProps) {
                   className="pl-10"
                 />
               </div>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!filteredStaff?.length}
+                onClick={() =>
+                  downloadCsv(
+                    `staff-performance-${timeRange}.csv`,
+                    toCsv(
+                      ["Staff ID", "Name", "Department", "Attendance %", "Punctuality %", "Late Arrivals", "Status"],
+                      (filteredStaff || []).map((s: any) => [
+                        s.staffId, s.name, s.department, s.attendanceRate, s.punctualityScore, s.lateCount, s.status,
+                      ])
+                    )
+                  )
+                }
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>

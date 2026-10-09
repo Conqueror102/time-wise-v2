@@ -32,7 +32,7 @@ const Benefits: React.FC = () => {
            {/* Card 2 */}
            <div className="bg-gradient-to-br from-white to-slate-50 p-8 rounded-2xl border border-slate-200 hover:border-blue-200 transition-all duration-300 group shadow-sm hover:shadow-md">
               <h3 className="text-xl font-bold text-slate-900 mb-4 group-hover:text-blue-600 transition-colors">Fully Biometric</h3>
-              <p className="text-slate-600 mb-6">Supports Windows Hello, FaceID, TouchID, fingerprint sensors and more. Secure and fast.</p>
+              <p className="text-slate-600 mb-6">Hands-free face recognition at the kiosk, plus fingerprint attendance terminals. Secure and fast.</p>
               <div className="h-1 w-12 bg-blue-600 rounded-full group-hover:w-full transition-all duration-500"></div>
            </div>
 

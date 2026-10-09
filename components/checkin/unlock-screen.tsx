@@ -10,11 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 interface UnlockScreenProps {
   onUnlock: (data: {
+    checkInToken: string
     tenantId: string
     organizationName: string
     capturePhotos: boolean
-    fingerprintEnabled?: boolean
-    isInTrial?: boolean
     enabledCheckInMethods?: {
       qrCode: boolean
       manualEntry: boolean
@@ -56,11 +55,9 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
 
       // Store in session storage (cleared when browser closes)
       const timestamp = getUTCDate().getTime().toString()
-      sessionStorage.setItem("checkInTenantId", data.tenantId)
+      sessionStorage.setItem("checkInToken", data.checkInToken)
       sessionStorage.setItem("checkInOrgName", data.organizationName)
       sessionStorage.setItem("capturePhotos", capturePhotosValue ? "true" : "false")
-      sessionStorage.setItem("fingerprintEnabled", data.fingerprintEnabled ? "true" : "false")
-      sessionStorage.setItem("isInTrial", data.isInTrial ? "true" : "false")
       sessionStorage.setItem("enabledCheckInMethods", JSON.stringify(data.enabledCheckInMethods || {
         qrCode: true,
         manualEntry: true,
@@ -69,11 +66,10 @@ export function UnlockScreen({ onUnlock }: UnlockScreenProps) {
       sessionStorage.setItem("settingsTimestamp", timestamp)
 
       onUnlock({
+        checkInToken: data.checkInToken,
         tenantId: data.tenantId,
         organizationName: data.organizationName,
         capturePhotos: capturePhotosValue,
-        fingerprintEnabled: data.fingerprintEnabled,
-        isInTrial: data.isInTrial,
         enabledCheckInMethods: data.enabledCheckInMethods,
       })
     } catch (err) {

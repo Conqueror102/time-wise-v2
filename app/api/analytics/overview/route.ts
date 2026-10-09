@@ -3,6 +3,7 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, AttendanceLog, TenantError } from "@/lib/types"
+import { getAnalyticsRange, getWorkingDays, isCheckIn, percent } from "@/lib/analytics/range"
 
 export const dynamic = 'force-dynamic'
 
@@ -12,114 +13,48 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
-    // Check feature access (unless in development mode)
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (!isDevelopment) {
-      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
-      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
-      
-      const subscription = await getSubscriptionStatus(context.tenantId)
-      
-      // Check if can access analytics
-      if (!hasFeatureAccess(subscription.plan as any, "canAccessAnalytics", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Analytics are locked. Upgrade to Professional or Enterprise to access analytics.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-
-      // Check if can access overview analytics
-      if (!hasFeatureAccess(subscription.plan as any, "analyticsOverview", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Overview analytics are not available in your plan. Upgrade to access this feature.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-    }
-
-    const searchParams = request.nextUrl.searchParams
-    const range = searchParams.get("range") || "30d"
-
-    // Calculate date range
-    const now = new Date()
-    const daysMap: Record<string, number> = {
-      "7d": 7,
-      "30d": 30,
-      "90d": 90,
-      "1y": 365,
-    }
-    const days = daysMap[range] || 30
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-    const startDateStr = startDate.toISOString().split("T")[0]
-
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
+    const range = await getAnalyticsRange(db, context.tenantId, request.nextUrl.searchParams.get("range"))
 
-    // Get total staff count
-    const totalStaff = await tenantDb.count<Staff>("staff", { isActive: true })
+    const activeStaff = await tenantDb.find<Staff>("staff", { isActive: true })
+    const totalStaff = activeStaff.length
 
-    // Get attendance records in range
-    const attendanceRecords = await tenantDb.find<AttendanceLog>("attendance", {
-      date: { $gte: startDateStr },
-    })
+    const [records, previousRecords] = await Promise.all([
+      tenantDb.find<AttendanceLog>("attendance", { date: { $gte: range.start, $lte: range.end } }),
+      tenantDb.find<AttendanceLog>("attendance", { date: { $gte: range.previousStart, $lte: range.previousEnd } }),
+    ])
 
-    // Calculate stats - only count records with actual check-ins
-    const recordsWithCheckIn = attendanceRecords.filter((r) => r.checkInTime)
-    const totalAttendance = recordsWithCheckIn.length
-    const lateArrivals = attendanceRecords.filter((r) => r.checkInTime && r.isLate === true).length
-    const earlyDepartures = attendanceRecords.filter((r) => r.checkOutTime && r.isEarly === true).length
+    const checkIns = records.filter(isCheckIn)
+    const lateArrivals = checkIns.filter((r) => r.isLate === true).length
+    const earlyDepartures = records.filter((r) => r.isEarly === true).length
 
-    // Calculate average attendance rate: (total check-ins / (total staff × days)) × 100
-    const expectedCheckIns = totalStaff * days
-    const averageAttendanceRate = expectedCheckIns > 0 
-      ? Math.round((totalAttendance / expectedCheckIns) * 100) 
-      : 0
+    // Attendance rate = check-ins / (active staff × days the organization was open)
+    const averageAttendanceRate = percent(checkIns.length, totalStaff * getWorkingDays(records).size)
 
-    // Calculate absentees (staff who haven't checked in today)
-    const today = new Date().toISOString().split("T")[0]
-    const todayRecords = await tenantDb.find<AttendanceLog>("attendance", {
-      date: today,
-    })
-    const todayAttendance = todayRecords.filter((r) => r.checkInTime).length
-    const absentees = totalStaff - todayAttendance
+    const previousCheckIns = previousRecords.filter(isCheckIn)
+    const previousAttendanceRate = percent(previousCheckIns.length, totalStaff * getWorkingDays(previousRecords).size)
+    const previousLateCount = previousCheckIns.filter((r) => r.isLate === true).length
 
-    // Calculate trends (compare with previous period)
-    const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000)
-    const previousStartDateStr = previousStartDate.toISOString().split("T")[0]
-    const previousRecords = await tenantDb.find<AttendanceLog>("attendance", {
-      date: { $gte: previousStartDateStr, $lt: startDateStr },
-    })
+    // Active staff who have not checked in today
+    const checkedInToday = new Set(checkIns.filter((r) => r.date === range.end).map((r) => r.staffId))
+    const absentees = activeStaff.filter((s) => !checkedInToday.has(s.staffId)).length
 
-    const previousRecordsWithCheckIn = previousRecords.filter((r) => r.checkInTime)
-    const previousExpectedCheckIns = totalStaff * days
-    const previousAttendanceRate = previousExpectedCheckIns > 0
-      ? (previousRecordsWithCheckIn.length / previousExpectedCheckIns) * 100
-      : 0
-    const attendanceTrend = averageAttendanceRate - previousAttendanceRate
-
-    const previousLateCount = previousRecords.filter((r) => r.checkInTime && r.isLate === true).length
-    
-    // Calculate lateness trend as percentage change in COUNT (not rate)
+    // Lateness trend is the percentage change in the number of late arrivals
     const latenessTrend = previousLateCount > 0
       ? Math.round(((lateArrivals - previousLateCount) / previousLateCount) * 100)
-      : (lateArrivals > 0 ? 100 : 0) // If no previous lates but have current lates, show 100% increase
+      : lateArrivals > 0 ? 100 : 0
 
     return NextResponse.json({
       totalStaff,
-      totalAttendance,
+      totalAttendance: checkIns.length,
       averageAttendanceRate,
       lateArrivals,
       earlyDepartures,
       absentees,
       trends: {
-        attendance: Math.round(attendanceTrend * 10) / 10,
-        lateness: Math.round(latenessTrend * 10) / 10,
+        attendance: averageAttendanceRate - previousAttendanceRate,
+        lateness: latenessTrend,
       },
     })
   } catch (error) {

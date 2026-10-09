@@ -4,10 +4,7 @@ import { getDatabase } from "@/lib/mongodb"
 import { getUTCDate, subtractDaysUTC } from "@/lib/utils/date"
 import {
   DashboardStats,
-  RevenueData,
   OrgGrowthData,
-  SubscriptionData,
-  PaymentRateData,
   TenantActivity,
   TimePeriod,
   PlatformStatsCache,
@@ -40,18 +37,14 @@ export class AnalyticsService {
       const [
         totalOrganizations,
         totalActiveUsers,
-        totalActiveSubscriptions,
-        totalRevenue,
-        mrr,
+        totalStaff,
         activeTenants,
         suspendedTenants,
         dailyCheckins,
       ] = await Promise.all([
         this.getTotalOrganizations(),
         this.getTotalActiveUsers(),
-        this.getTotalActiveSubscriptions(),
-        this.getTotalRevenue(),
-        this.getMRR(),
+        db.collection("staff").countDocuments({ isActive: true }),
         this.getActiveTenants(),
         this.getSuspendedTenants(),
         this.getDailyCheckins(),
@@ -60,9 +53,7 @@ export class AnalyticsService {
       return {
         totalOrganizations,
         totalActiveUsers,
-        totalActiveSubscriptions,
-        totalRevenue,
-        mrr,
+        totalStaff,
         activeTenants,
         suspendedTenants,
         dailyCheckins,
@@ -70,87 +61,6 @@ export class AnalyticsService {
     })
   }
 
-  /**
-   * Get revenue growth data
-   */
-  async getRevenueGrowth(period: TimePeriod): Promise<RevenueData[]> {
-    const cacheKey = `revenue_growth_${period}`
-
-    return this.getCachedMetric(cacheKey, async () => {
-      const db = await getDatabase()
-      const webhooks = db.collection("paystack_webhooks")
-
-      // Calculate date range based on period
-      const now = getUTCDate()
-      let startDate: Date
-
-      switch (period) {
-        case "day":
-          startDate = subtractDaysUTC(now, 30) // Last 30 days
-          break
-        case "week":
-          startDate = subtractDaysUTC(now, 12 * 7) // Last 12 weeks
-          break
-        case "month":
-          startDate = new Date(Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth() - 12,
-            now.getUTCDate()
-          )) // Last 12 months
-          break
-        case "year":
-          startDate = new Date(Date.UTC(
-            now.getUTCFullYear() - 5,
-            now.getUTCMonth(),
-            now.getUTCDate()
-          )) // Last 5 years
-          break
-        default:
-          startDate = subtractDaysUTC(now, 30) // Default to last 30 days
-      }
-
-      const revenueData = await webhooks
-        .aggregate([
-          {
-            $match: {
-              event: { $in: ["charge.success", "invoice.payment_success"] },
-              status: "success",
-              timestamp: { $gte: startDate },
-            },
-          },
-          {
-            $group: {
-              _id: {
-                $dateToString: {
-                  format:
-                    period === "day"
-                      ? "%Y-%m-%d"
-                      : period === "week"
-                        ? "%Y-W%V"
-                        : period === "month"
-                          ? "%Y-%m"
-                          : "%Y",
-                  date: "$timestamp",
-                },
-              },
-              amount: { $sum: "$amount" },
-            },
-          },
-          { $sort: { _id: 1 } },
-          {
-            $project: {
-              _id: 0,
-              date: "$_id",
-              amount: { $divide: ["$amount", 100] }, // Convert from kobo to naira
-              currency: "NGN",
-            },
-          },
-        ])
-        .toArray()
-
-      return revenueData as RevenueData[]
-    })
-  }
 
   /**
    * Get organization growth data
@@ -186,70 +96,7 @@ export class AnalyticsService {
     })
   }
 
-  /**
-   * Get subscription distribution
-   */
-  async getSubscriptionDistribution(): Promise<SubscriptionData[]> {
-    return this.getCachedMetric("subscription_distribution", async () => {
-      const db = await getDatabase()
-      const organizations = db.collection("organizations")
 
-      const total = await organizations.countDocuments()
-
-      const distribution = await organizations
-        .aggregate([
-          {
-            $group: {
-              _id: "$subscriptionTier",
-              count: { $sum: 1 },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              plan: "$_id",
-              count: 1,
-              percentage: {
-                $multiply: [{ $divide: ["$count", total] }, 100],
-              },
-            },
-          },
-        ])
-        .toArray()
-
-      return distribution as SubscriptionData[]
-    })
-  }
-
-  /**
-   * Get payment success rate
-   */
-  async getPaymentSuccessRate(): Promise<PaymentRateData> {
-    return this.getCachedMetric("payment_success_rate", async () => {
-      const db = await getDatabase()
-      const webhooks = db.collection("paystack_webhooks")
-
-      const [successful, failed] = await Promise.all([
-        webhooks.countDocuments({
-          event: { $in: ["charge.success", "invoice.payment_success"] },
-          status: "success",
-        }),
-        webhooks.countDocuments({
-          event: "invoice.payment_failed",
-          status: "failed",
-        }),
-      ])
-
-      const total = successful + failed
-      const successRate = total > 0 ? (successful / total) * 100 : 0
-
-      return {
-        successful,
-        failed,
-        successRate,
-      }
-    })
-  }
 
   /**
    * Get today's check-ins count
@@ -405,84 +252,13 @@ export class AnalyticsService {
     return await db.collection("users").countDocuments({ isActive: true })
   }
 
-  private async getTotalActiveSubscriptions(): Promise<number> {
-    const db = await getDatabase()
-    return await db
-      .collection("organizations")
-      .countDocuments({ subscriptionStatus: "active" })
-  }
 
-  private async getTotalRevenue(): Promise<number> {
-    const db = await getDatabase()
-    const webhooks = db.collection("paystack_webhooks")
 
-    const result = await webhooks
-      .aggregate([
-        {
-          $match: {
-            event: { $in: ["charge.success", "invoice.payment_success"] },
-            status: "success",
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$amount" },
-          },
-        },
-      ])
-      .toArray()
-
-    return result.length > 0 ? result[0].total / 100 : 0 // Convert from kobo to naira
-  }
-
-  private async getMRR(): Promise<number> {
-    const db = await getDatabase()
-    const organizations = db.collection("organizations")
-
-    const activeSubs = await organizations
-      .aggregate([
-        {
-          $match: { subscriptionStatus: "active" },
-        },
-        {
-          $lookup: {
-            from: "paystack_webhooks",
-            let: { tenantId: { $toString: "$_id" } },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $eq: ["$tenantId", "$$tenantId"] },
-                  event: "subscription.create",
-                  status: "success",
-                },
-              },
-              { $sort: { timestamp: -1 } },
-              { $limit: 1 },
-            ],
-            as: "subscription",
-          },
-        },
-        {
-          $project: {
-            amount: { $arrayElemAt: ["$subscription.amount", 0] },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$amount" },
-          },
-        },
-      ])
-      .toArray()
-
-    return activeSubs.length > 0 ? activeSubs[0].total / 100 : 0
-  }
 
   private async getActiveTenants(): Promise<number> {
     const db = await getDatabase()
-    return await db.collection("organizations").countDocuments({ status: "active" })
+    // "trial" is a legacy status from when the product had paid plans
+    return await db.collection("organizations").countDocuments({ status: { $in: ["active", "trial"] } })
   }
 
   private async getSuspendedTenants(): Promise<number> {

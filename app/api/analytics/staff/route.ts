@@ -3,8 +3,18 @@ import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, AttendanceLog, TenantError } from "@/lib/types"
+import { getAnalyticsRange, getJoinDate, getWorkingDays, isCheckIn, percent } from "@/lib/analytics/range"
 
 export const dynamic = 'force-dynamic'
+
+function statusFor(attendanceRate: number, punctualityScore: number, attended: number): string {
+  if (attended === 0) return "Absent"
+  if (attendanceRate >= 90 && punctualityScore >= 90) return "Excellent"
+  if (attendanceRate >= 75 && punctualityScore >= 75) return "Good"
+  if (attendanceRate >= 50) return "Fair"
+  if (attendanceRate >= 25) return "Poor"
+  return "Very Poor"
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,147 +22,61 @@ export async function GET(request: NextRequest) {
       allowedRoles: ["org_admin", "manager"],
     })
 
-    // Check feature access - Staff performance analytics are Enterprise only (unless in development mode)
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (!isDevelopment) {
-      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
-      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
-      
-      const subscription = await getSubscriptionStatus(context.tenantId)
-      
-      // Check if can access staff performance analytics (Enterprise only)
-      if (!hasFeatureAccess(subscription.plan as any, "analyticsPerformance", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Staff performance analytics are only available in the Enterprise plan. Upgrade to access detailed reports.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-    }
-
-    const searchParams = request.nextUrl.searchParams
-    const range = searchParams.get("range") || "30d"
-
-    const now = new Date()
-    const daysMap: Record<string, number> = {
-      "7d": 7,
-      "30d": 30,
-      "90d": 90,
-      "1y": 365,
-    }
-    const days = daysMap[range] || 30
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-    const startDateStr = startDate.toISOString().split("T")[0]
-
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
+    const range = await getAnalyticsRange(db, context.tenantId, request.nextUrl.searchParams.get("range"))
 
-    // Get all staff
-    const allStaff = await tenantDb.find<Staff>("staff", { isActive: true })
+    const [activeStaff, records] = await Promise.all([
+      tenantDb.find<Staff>("staff", { isActive: true }),
+      tenantDb.find<AttendanceLog>("attendance", { date: { $gte: range.start, $lte: range.end } }),
+    ])
 
-    // Get attendance records in range
-    const attendanceRecords = await tenantDb.find<AttendanceLog>("attendance", {
-      date: { $gte: startDateStr },
-    })
+    const workingDays = [...getWorkingDays(records)]
 
-    // Group attendance by staff
-    const staffAttendanceMap: Record<string, AttendanceLog[]> = {}
-    attendanceRecords.forEach((record) => {
-      if (!staffAttendanceMap[record.staffId]) {
-        staffAttendanceMap[record.staffId] = []
-      }
-      staffAttendanceMap[record.staffId].push(record)
-    })
+    const checkInsByStaff: Record<string, AttendanceLog[]> = {}
+    for (const record of records) {
+      if (isCheckIn(record)) (checkInsByStaff[record.staffId] ??= []).push(record)
+    }
 
-    // Calculate metrics for each staff member
-    const staffData = allStaff.map((member) => {
-      const attendance = staffAttendanceMap[member.staffId] || []
-      
-      // Filter for actual check-ins (records with checkInTime)
-      const checkIns = attendance.filter((a) => a.checkInTime)
-      const totalAttendance = checkIns.length
-      const lateCount = attendance.filter((a) => a.checkInTime && a.isLate === true).length
+    const staff = activeStaff.map((member) => {
+      const checkIns = checkInsByStaff[member.staffId] || []
+      const attendedDays = new Set(checkIns.map((r) => r.date)).size
+      const lateCount = checkIns.filter((r) => r.isLate === true).length
 
-      // Attendance rate: (days attended / total days) × 100
-      const attendanceRate = days > 0
-        ? Math.round((totalAttendance / days) * 100)
-        : 0
+      // Only count days the organization was open after this person was added
+      const joined = getJoinDate(member.createdAt, range.timezone)
+      const expectedDays = workingDays.filter((d) => !joined || d >= joined).length
 
-      // Punctuality score: (on-time arrivals / total check-ins) × 100
-      // Only calculate if they have attendance, otherwise N/A (0)
-      const punctualityScore = totalAttendance > 0
-        ? Math.round(((totalAttendance - lateCount) / totalAttendance) * 100)
-        : 0
-
-      // Determine status based on attendance primarily
-      let status = "Absent"
-      if (totalAttendance === 0 || attendanceRate === 0) {
-        status = "Absent"
-      } else if (attendanceRate >= 90 && punctualityScore >= 90) {
-        status = "Excellent"
-      } else if (attendanceRate >= 75 && punctualityScore >= 75) {
-        status = "Good"
-      } else if (attendanceRate >= 50) {
-        status = "Fair"
-      } else if (attendanceRate >= 25) {
-        status = "Poor"
-      } else if (attendanceRate > 0) {
-        status = "Very Poor"
-      }
+      const attendanceRate = percent(attendedDays, expectedDays)
+      const punctualityScore = percent(checkIns.length - lateCount, checkIns.length)
 
       return {
         staffId: member.staffId,
         name: member.name,
         department: member.department || "N/A",
-        attendanceRate: Math.min(attendanceRate, 100),
+        attendanceRate,
         punctualityScore,
         lateCount,
-        status,
+        status: statusFor(attendanceRate, punctualityScore, attendedDays),
       }
     })
 
-    // Sort by attendance rate (with secondary sort by punctuality for ties)
-    staffData.sort((a, b) => {
-      if (b.attendanceRate !== a.attendanceRate) {
-        return b.attendanceRate - a.attendanceRate
-      }
-      return b.punctualityScore - a.punctualityScore
-    })
+    staff.sort((a, b) => b.attendanceRate - a.attendanceRate || b.punctualityScore - a.punctualityScore)
 
-    // Get top performers - only from staff who actually attended
-    const staffWithAttendance = staffData.filter(s => s.attendanceRate > 0)
-    
-    // Best attendance (with punctuality as tiebreaker)
-    const bestAttendance = staffWithAttendance[0] || null
-    
-    // Most punctual (with attendance as tiebreaker)
-    const mostPunctual = [...staffWithAttendance].sort((a, b) => {
-      if (b.punctualityScore !== a.punctualityScore) {
-        return b.punctualityScore - a.punctualityScore
-      }
-      return b.attendanceRate - a.attendanceRate
-    })[0] || null
-    
-    const topPerformers = {
-      attendance: bestAttendance,
-      punctual: mostPunctual,
-    }
-
-    // Get staff needing attention - most late arrivals (with attendance as tiebreaker)
-    const needsAttention = [...staffWithAttendance]
-      .filter(s => s.lateCount > 0)
-      .sort((a, b) => {
-        if (b.lateCount !== a.lateCount) {
-          return b.lateCount - a.lateCount
-        }
-        return a.attendanceRate - b.attendanceRate // Lower attendance is worse
-      })[0] || null
+    const attended = staff.filter((s) => s.attendanceRate > 0)
+    const mostPunctual = [...attended].sort(
+      (a, b) => b.punctualityScore - a.punctualityScore || b.attendanceRate - a.attendanceRate
+    )[0] || null
+    const needsAttention = attended
+      .filter((s) => s.lateCount > 0)
+      .sort((a, b) => b.lateCount - a.lateCount || a.attendanceRate - b.attendanceRate)[0] || null
 
     return NextResponse.json({
-      staff: staffData,
-      topPerformers,
+      staff,
+      topPerformers: {
+        attendance: attended[0] || null,
+        punctual: mostPunctual,
+      },
       needsAttention,
     })
   } catch (error) {

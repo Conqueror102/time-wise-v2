@@ -4,14 +4,15 @@
  * POST - Register new staff member
  */
 
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { withAuth } from "@/lib/auth"
 import { Staff, RegisterStaffRequest, TenantError } from "@/lib/types"
-import { canAddStaff, PLAN_FEATURES } from "@/lib/features/feature-manager"
 import { generateQRCode } from "@/lib/utils/qr-generator"
+import { buildStaffQrPayload, QR_VERSION } from "@/lib/checkin/qr"
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,8 +27,8 @@ async function generateUniqueStaffId(tenantDb: any, prefix: string = "STAFF"): P
   const maxAttempts = 10
 
   while (exists && attempts < maxAttempts) {
-    // Generate random 4-digit number
-    const random = Math.floor(1000 + Math.random() * 9000)
+    // Random 6-digit number; staff IDs must not be guessable
+    const random = crypto.randomInt(100000, 1000000)
     staffId = `${prefix}${random}`
     
     const existingStaff = await tenantDb.findOne("staff", { staffId })
@@ -42,17 +43,6 @@ async function generateUniqueStaffId(tenantDb: any, prefix: string = "STAFF"): P
   return staffId!
 }
 
-/**
- * Generate QR code data for staff
- */
-function generateQRData(tenantId: string, staffId: string): string {
-  const qrData = {
-    tenantId,
-    staffId,
-    version: "1.0",
-  }
-  return Buffer.from(JSON.stringify(qrData)).toString("base64")
-}
 
 /**
  * GET - List all staff members for authenticated tenant
@@ -70,6 +60,20 @@ export async function GET(request: NextRequest) {
     const staff = await tenantDb.find<Staff>("staff", {}, {
       sort: { createdAt: -1 },
     })
+
+    // Replace QR codes from before they were signed (old printed badges stop working)
+    for (const member of staff as any[]) {
+      if (member.qrVersion !== QR_VERSION) {
+        member.qrCode = await generateQRCode(buildStaffQrPayload(context.tenantId, member.staffId))
+        member.qrVersion = QR_VERSION
+        member.qrUpdatedAt = new Date()
+        await tenantDb.updateOne<Staff>(
+          "staff",
+          { staffId: member.staffId },
+          { $set: { qrCode: member.qrCode, qrVersion: QR_VERSION, qrUpdatedAt: member.qrUpdatedAt } as any }
+        )
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
     const { name, email, department, position } = body
 
     // Validate required fields
-    if (!name || !department || !position) {
+    if (![name, department, position].every((v) => typeof v === "string" && v.trim())) {
       return NextResponse.json(
         { error: "Name, department, and position are required" },
         { status: 400 }
@@ -116,45 +120,11 @@ export async function POST(request: NextRequest) {
     const db = await getDatabase()
     const tenantDb = createTenantDatabase(db, context.tenantId)
 
-    // Check staff limit and feature access (unless in development mode)
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (!isDevelopment) {
-      // Get subscription status
-      const { getSubscriptionStatus } = await import("@/lib/subscription/subscription-manager")
-      const { hasFeatureAccess } = await import("@/lib/features/feature-manager")
-      
-      const subscription = await getSubscriptionStatus(context.tenantId)
-      
-      // Check if can add staff (feature access)
-      if (!hasFeatureAccess(subscription.plan as any, "canAddStaff", subscription.isTrialActive, isDevelopment)) {
-        return NextResponse.json(
-          { 
-            error: "Your trial has expired. Upgrade to Professional or Enterprise to add staff members.",
-            code: "FEATURE_LOCKED"
-          },
-          { status: 403 }
-        )
-      }
-
-      // Count current staff
-      const currentStaffCount = await tenantDb.count("staff", {})
-      
-      // Check staff limit
-      if (!canAddStaff(subscription.plan as any, currentStaffCount, subscription.isTrialActive, isDevelopment)) {
-        const maxStaff = PLAN_FEATURES[subscription.plan as any]?.maxStaff || 10
-        return NextResponse.json(
-          { 
-            error: `Staff limit reached. Your ${subscription.plan} plan allows up to ${maxStaff} staff members. Please upgrade to add more.`,
-            code: "STAFF_LIMIT_REACHED"
-          },
-          { status: 403 }
-        )
-      }
-    }
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
 
     // Check if email already exists in this tenant (if provided)
-    if (email) {
-      const existingStaff = await tenantDb.findOne<Staff>("staff", { email })
+    if (normalizedEmail) {
+      const existingStaff = await tenantDb.findOne<Staff>("staff", { email: normalizedEmail })
       if (existingStaff) {
         return NextResponse.json(
           { error: "Staff member with this email already exists" },
@@ -166,20 +136,19 @@ export async function POST(request: NextRequest) {
     // Generate unique staff ID
     const staffId = await generateUniqueStaffId(tenantDb)
 
-    // Generate QR code data
-    const qrData = generateQRData(context.tenantId, staffId)
-
-    // Generate QR code
-    const qrCode = await generateQRCode(qrData)
+    // Signed QR code: proves the person has their own code, not just their staff ID
+    const qrCode = await generateQRCode(buildStaffQrPayload(context.tenantId, staffId))
 
     // Create staff member
     const newStaff = await tenantDb.insertOne<Staff>("staff", {
       staffId,
-      name,
-      email,
-      department,
-      position,
+      name: name.trim(),
+      email: normalizedEmail,
+      department: department.trim(),
+      position: position.trim(),
       qrCode,
+      qrVersion: QR_VERSION,
+      qrUpdatedAt: new Date(),
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),

@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { getImageSrc } from "@/lib/utils/image"
-import { getUTCDateString, subtractDaysUTC, getLocalTimeString, getLocalDateString } from "@/lib/utils/date"
+import { addDays, getLocalTimeString, getZonedDateTime } from "@/lib/utils/date"
+import { formatDateLabel } from "@/hooks/use-dashboard-stats"
+import { apiFetch } from "@/lib/api-client"
+import { toCsv, downloadCsv } from "@/lib/utils/csv"
 import { Calendar, Filter, Download, Search, FileText } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,8 +18,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PageGate } from "@/components/subscription/page-gate"
-import { FeatureGate } from "@/components/subscription/feature-gate"
+
+/** Today's date in the organization's timezone (falls back to the browser's) */
+function organizationToday(): string {
+  try {
+    const org = JSON.parse(localStorage.getItem("organization") || "{}")
+    const tz = org.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    return getZonedDateTime(new Date(), tz).date
+  } catch {
+    return new Date().toLocaleDateString("en-CA")
+  }
+}
 
 interface Staff {
   staffId: string
@@ -35,19 +47,21 @@ interface AttendanceRecord {
   date: string
 }
 
-function HistoryPageContent() {
+export default function HistoryPage() {
   const [staff, setStaff] = useState<Staff[]>([])
   const [selectedStaff, setSelectedStaff] = useState<string>("all")
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
   const [filteredHistory, setFilteredHistory] = useState<AttendanceRecord[]>([])
-  const [startDate, setStartDate] = useState(getUTCDateString(subtractDaysUTC(new Date(), 7)))
-  const [endDate, setEndDate] = useState(getUTCDateString())
+  const [endDate, setEndDate] = useState(organizationToday)
+  const [startDate, setStartDate] = useState(() => addDays(organizationToday(), -6))
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     fetchStaff()
+    fetchAttendanceHistory()
   }, [])
 
   useEffect(() => {
@@ -56,16 +70,7 @@ function HistoryPageContent() {
 
   const fetchStaff = async () => {
     try {
-      const token = localStorage.getItem("accessToken")
-      const response = await fetch("/api/staff", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) throw new Error("Failed to fetch staff")
-
-      const data = await response.json()
+      const data = await apiFetch("/api/staff")
       setStaff(data.staff || [])
     } catch (err) {
       console.error(err)
@@ -73,27 +78,23 @@ function HistoryPageContent() {
   }
 
   const fetchAttendanceHistory = async () => {
+    if (startDate > endDate) {
+      setError("Start date must be on or before the end date")
+      return
+    }
     setLoading(true)
+    setError("")
     try {
-      const token = localStorage.getItem("accessToken")
       const params = new URLSearchParams({
         startDate,
         endDate,
         ...(selectedStaff !== "all" && { staffId: selectedStaff }),
       })
-
-      const response = await fetch(`/api/attendance/history?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) throw new Error("Failed to fetch history")
-
-      const data = await response.json()
+      const data = await apiFetch(`/api/attendance/history?${params}`)
       setAttendanceHistory(data.attendance || [])
     } catch (err) {
-      console.error(err)
+      setAttendanceHistory([])
+      setError(err instanceof Error ? err.message : "Failed to load attendance history")
     } finally {
       setLoading(false)
     }
@@ -118,9 +119,9 @@ function HistoryPageContent() {
     if (searchTerm) {
       filtered = filtered.filter(
         (record) =>
-          record.staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.staffId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.department.toLowerCase().includes(searchTerm.toLowerCase())
+          [record.staffName, record.staffId, record.department].some((field) =>
+            (field || "").toLowerCase().includes(searchTerm.toLowerCase())
+          )
       )
     }
 
@@ -128,11 +129,6 @@ function HistoryPageContent() {
   }
 
   const exportToCSV = () => {
-    if (filteredHistory.length === 0) {
-      alert("No data to export")
-      return
-    }
-
     const headers = ["Date", "Staff ID", "Staff Name", "Department", "Check In", "Check Out", "Late", "Early Departure"]
     const rows = filteredHistory.map((record) => [
       record.date,
@@ -140,34 +136,21 @@ function HistoryPageContent() {
       record.staffName,
       record.department,
       formatTime(record.checkInTime),
-      record.checkOutTime ? formatTime(record.checkOutTime) : "N/A",
+      record.checkOutTime ? formatTime(record.checkOutTime) : "",
       record.isLate ? "Yes" : "No",
       record.isEarly ? "Yes" : "No",
     ])
-
-    const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
-    const url = URL.createObjectURL(blob)
-    link.setAttribute("href", url)
-    link.setAttribute(
-      "download",
-      `attendance_${selectedStaff !== "all" ? selectedStaff : "all"}_${startDate}_to_${endDate}.csv`
+    downloadCsv(
+      `attendance_${selectedStaff !== "all" ? selectedStaff : "all"}_${startDate}_to_${endDate}.csv`,
+      toCsv(headers, rows)
     )
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
   }
 
   const formatTime = (timestamp: string) => {
     return getLocalTimeString(new Date(timestamp))
   }
 
-    const formatDate = (dateStr: string) => {
-    return getLocalDateString(new Date(dateStr))
-  }
+  const formatDate = (dateStr: string) => formatDateLabel(dateStr)
 
   return (
     <div className="space-y-6">
@@ -175,6 +158,10 @@ function HistoryPageContent() {
         <h1 className="text-3xl font-bold text-gray-900">Attendance History</h1>
         <p className="text-gray-600 mt-1">View and export staff attendance records</p>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -367,11 +354,3 @@ function HistoryPageContent() {
   )
 }
 
-
-export default function HistoryPage() {
-  return (
-    <PageGate feature="canAccessHistory">
-      <HistoryPageContent />
-    </PageGate>
-  )
-}

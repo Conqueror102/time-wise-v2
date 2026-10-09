@@ -33,14 +33,14 @@ const HowItWorks: React.FC = () => {
     {
       number: 3,
       title: "Register Biometrics",
-      description: "Open the biometric registration URL on your check-in device to register fingerprints and photos.",
+      description: "Register each staff member's face from the Staff page, and enrol fingerprints on your fingerprint device.",
       icon: Fingerprint,
       color: "green",
       details: [
-        "Open /register-biometric on kiosk device",
-        "Staff scans fingerprint on the device",
-        "Capture photo for verification",
-        "Biometrics stored securely"
+        "Click Face / Fingerprint on a staff member",
+        "Staff look at the camera once to register",
+        "Enrol fingers on a fingerprint terminal",
+        "Faces stored on your own server"
       ]
     },
     {

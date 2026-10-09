@@ -1,141 +1,130 @@
 /**
  * Rate Limiting Middleware
- * Prevents abuse and DDoS attacks on critical endpoints
+ *
+ * Fixed-window counters stored in MongoDB so limits hold across serverless
+ * instances. Expired windows are removed by a TTL index.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodb'
 
-interface RateLimitRecord {
-  count: number
-  resetTime: number
-}
-
-// In-memory store (use Redis in production for distributed systems)
-const rateLimitMap = new Map<string, RateLimitRecord>()
-
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, record] of rateLimitMap.entries()) {
-    if (now > record.resetTime) {
-      rateLimitMap.delete(key)
-    }
-  }
-}, 5 * 60 * 1000)
+const COLLECTION = 'rate_limits'
 
 /**
  * Rate limit configuration presets
  */
 export const RateLimitPresets = {
   AUTH_LOGIN: {
+    name: 'auth_login',
     maxRequests: 5,
     windowMs: 15 * 60 * 1000, // 15 minutes
     message: 'Too many login attempts. Please try again in 15 minutes.',
   },
   AUTH_REGISTER: {
+    name: 'auth_register',
     maxRequests: 3,
     windowMs: 60 * 60 * 1000, // 1 hour
     message: 'Too many registration attempts. Please try again in 1 hour.',
   },
   PAYMENT: {
+    name: 'payment',
     maxRequests: 10,
     windowMs: 60 * 1000, // 1 minute
     message: 'Too many payment requests. Please try again in a minute.',
   },
+  CHECKIN_PASSCODE: {
+    name: 'checkin_passcode',
+    maxRequests: 10,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    message: 'Too many passcode attempts. Please try again in 15 minutes.',
+  },
   API_DEFAULT: {
+    name: 'api_default',
     maxRequests: 100,
     windowMs: 60 * 1000, // 1 minute
     message: 'Too many requests. Please slow down.',
   },
-  OTP: {
-    maxRequests: 3,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    message: 'Too many OTP requests. Please try again in 15 minutes.',
-  },
 } as const
 
 export interface RateLimitConfig {
+  name: string
   maxRequests: number
   windowMs: number
   message?: string
 }
 
+let indexReady: Promise<unknown> | null = null
+
 /**
  * Get client identifier (IP address)
  */
-function getClientIdentifier(request: NextRequest): string {
-  // Try to get real IP from headers (for proxies/load balancers)
+export function getClientIdentifier(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for')
-  const realIp = request.headers.get('x-real-ip')
-  
   if (forwardedFor) {
     return forwardedFor.split(',')[0].trim()
   }
-  
-  if (realIp) {
-    return realIp
-  }
-  
-  // Fallback to connection IP
-  return request.ip || 'unknown'
+  return request.headers.get('x-real-ip') || 'unknown'
 }
 
 /**
- * Check if request should be rate limited
+ * Count a request against the limit for `identifier`
  */
-export function rateLimit(
+export async function rateLimit(
   identifier: string,
   config: RateLimitConfig
-): { limited: boolean; remaining: number; resetTime: number } {
+): Promise<{ limited: boolean; remaining: number; resetTime: number }> {
   const now = Date.now()
-  const record = rateLimitMap.get(identifier)
+  const windowStart = Math.floor(now / config.windowMs) * config.windowMs
+  const resetTime = windowStart + config.windowMs
 
-  // No record or expired - create new
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(identifier, {
-      count: 1,
-      resetTime: now + config.windowMs,
+  const db = await getDatabase()
+  const collection = db.collection<{ _id: string; count: number; expiresAt: Date }>(COLLECTION)
+
+  if (!indexReady) {
+    indexReady = collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch((err) => {
+      indexReady = null
+      console.error('Failed to create rate limit TTL index:', err)
     })
-    return {
-      limited: false,
-      remaining: config.maxRequests - 1,
-      resetTime: now + config.windowMs,
-    }
   }
 
-  // Check if limit exceeded
-  if (record.count >= config.maxRequests) {
-    return {
-      limited: true,
-      remaining: 0,
-      resetTime: record.resetTime,
-    }
-  }
+  const record = await collection.findOneAndUpdate(
+    { _id: `${config.name}:${identifier}:${windowStart}` },
+    { $inc: { count: 1 }, $setOnInsert: { expiresAt: new Date(resetTime) } },
+    { upsert: true, returnDocument: 'after' }
+  )
 
-  // Increment count
-  record.count++
-  
+  const count = record?.count ?? 1
   return {
-    limited: false,
-    remaining: config.maxRequests - record.count,
-    resetTime: record.resetTime,
+    limited: count > config.maxRequests,
+    remaining: Math.max(0, config.maxRequests - count),
+    resetTime,
   }
 }
 
 /**
  * Apply rate limiting to a request
- * Returns NextResponse if rate limited, null otherwise
+ * Returns NextResponse if rate limited, null otherwise.
+ * `key` narrows the limit further (e.g. per email) in addition to the client IP.
  */
-export function applyRateLimit(
+export async function applyRateLimit(
   request: NextRequest,
-  config: RateLimitConfig
-): NextResponse | null {
-  const identifier = getClientIdentifier(request)
-  const result = rateLimit(identifier, config)
+  config: RateLimitConfig,
+  key?: string
+): Promise<NextResponse | null> {
+  const identifier = key ? `${getClientIdentifier(request)}:${key}` : getClientIdentifier(request)
+
+  let result
+  try {
+    result = await rateLimit(identifier, config)
+  } catch (error) {
+    // Never lock users out because the limiter's storage is unavailable
+    console.error('Rate limit check failed:', error)
+    return null
+  }
 
   if (result.limited) {
     const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000)
-    
+
     return NextResponse.json(
       {
         error: config.message || 'Too many requests',
@@ -153,36 +142,5 @@ export function applyRateLimit(
     )
   }
 
-  // Add rate limit headers to response (handled by caller)
   return null
-}
-
-/**
- * Get rate limit headers for successful requests
- * Read-only operation that doesn't increment the counter
- */
-export function getRateLimitHeaders(
-  identifier: string,
-  config: RateLimitConfig
-): Record<string, string> {
-  const now = Date.now()
-  const record = rateLimitMap.get(identifier)
-
-  let remaining: number
-  let resetTime: number
-
-  if (!record || now > record.resetTime) {
-    // No active window yet – everything still available
-    remaining = config.maxRequests
-    resetTime = now + config.windowMs
-  } else {
-    remaining = Math.max(0, config.maxRequests - record.count)
-    resetTime = record.resetTime
-  }
-
-  return {
-    "X-RateLimit-Limit": config.maxRequests.toString(),
-    "X-RateLimit-Remaining": remaining.toString(),
-    "X-RateLimit-Reset": new Date(resetTime).toISOString(),
-  }
 }
