@@ -14,10 +14,28 @@ const REQUEST_TIMEOUT_MS = 30_000
 // Minimum confidence the face in the photo is a real face
 const DETECTION_THRESHOLD = 0.8
 
-export interface HeadPose {
-  yaw: number
-  pitch: number
-  roll: number
+/** Image coordinates of the eyes and nose tip, as returned by face detectors */
+export interface FaceLandmarks {
+  eyes: [number, number][]
+  nose: [number, number]
+}
+
+/**
+ * How far the head is turned, from the landmarks: the nose tip's horizontal offset
+ * from the point between the eyes, divided by the distance between the eyes.
+ * 0 is straight on; positive means the nose moved to the image's right, which is the
+ * person turning to their own left (the camera frame is not mirrored). Roughly
+ * 0.35 x tan(yaw) for a real face, so 15 degrees is about 0.09.
+ *
+ * A printed photo or a screen tilted towards the camera shrinks horizontally as a
+ * whole, so this ratio barely changes, unlike a real head turning.
+ */
+export function headTurn(landmarks: FaceLandmarks | undefined): number | undefined {
+  if (!landmarks || landmarks.eyes.length < 2) return undefined
+  const [first, second] = [...landmarks.eyes].sort((a, b) => a[0] - b[0])
+  const distance = second[0] - first[0]
+  if (!(distance > 0)) return undefined
+  return (landmarks.nose[0] - (first[0] + second[0]) / 2) / distance
 }
 
 export interface FaceMatch {
@@ -28,8 +46,8 @@ export interface FaceMatch {
   faceWidthRatio?: number
   /** True when no face was found at all (as opposed to an unknown face) */
   noFace?: boolean
-  /** Head pose in degrees, used by the liveness check */
-  pose?: HeadPose
+  /** Head turn from the landmarks (see headTurn), used by the liveness check */
+  turn?: number
   error?: string
 }
 
@@ -132,10 +150,10 @@ export async function registerFace(imageBase64: string, tenantId: string, staffI
 export async function searchFace(imageBase64: string, tenantId: string): Promise<FaceMatch> {
   try {
     const result = await request<{
-      result: { box?: { x_min: number; x_max: number }; pose?: HeadPose; subjects?: { subject: string; similarity: number }[] }[]
+      result: { box?: { x_min: number; x_max: number }; landmarks?: [number, number][]; subjects?: { subject: string; similarity: number }[] }[]
     }>(
       "POST",
-      `/api/v1/recognition/recognize?limit=1&prediction_count=20&det_prob_threshold=${DETECTION_THRESHOLD}&face_plugins=pose`,
+      `/api/v1/recognition/recognize?limit=1&prediction_count=20&det_prob_threshold=${DETECTION_THRESHOLD}&face_plugins=landmarks`,
       { file: imageBase64 }
     )
 
@@ -143,17 +161,19 @@ export async function searchFace(imageBase64: string, tenantId: string): Promise
     const imageWidth = getImageSize(Buffer.from(imageBase64, "base64"))?.width
     const faceWidthRatio = face?.box && imageWidth ? (face.box.x_max - face.box.x_min) / imageWidth : undefined
 
-    const pose = face?.pose && Number.isFinite(face.pose.yaw) ? face.pose : undefined
+    // FaceNet landmarks: left eye, right eye, nose, mouth left, mouth right
+    const points = face?.landmarks
+    const turn = points && points.length >= 3 ? headTurn({ eyes: [points[0], points[1]], nose: points[2] }) : undefined
     const prefix = subjectFor(tenantId, "")
     const match = face?.subjects
       ?.filter((s) => s.subject.startsWith(prefix))
       .sort((a, b) => b.similarity - a.similarity)[0]
 
     if (!match || match.similarity < similarityThreshold()) {
-      return { success: false, faceWidthRatio, pose, error: "Face not recognized" }
+      return { success: false, faceWidthRatio, turn, error: "Face not recognized" }
     }
 
-    return { success: true, staffId: match.subject.slice(prefix.length), confidence: match.similarity, faceWidthRatio, pose }
+    return { success: true, staffId: match.subject.slice(prefix.length), confidence: match.similarity, faceWidthRatio, turn }
   } catch (error) {
     if (error instanceof CompreFaceError && /no face is found/i.test(error.message)) {
       return { success: false, noFace: true, error: friendlyError(error) }

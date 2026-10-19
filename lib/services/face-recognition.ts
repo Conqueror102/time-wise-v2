@@ -45,12 +45,12 @@ export async function registerFace(
 
 /**
  * Find which of this tenant's staff is in the photo.
- * Pass `pose: true` when the head pose is needed for a liveness check.
+ * Pass `landmarks: true` when the head turn is needed for a liveness check.
  */
 export async function searchFace(
   imageBase64: string,
   tenantId: string,
-  options: { pose?: boolean } = {}
+  options: { landmarks?: boolean } = {}
 ): Promise<compreface.FaceMatch> {
   const provider = getFaceProvider()
   if (!provider) return { success: false, error: NOT_CONFIGURED }

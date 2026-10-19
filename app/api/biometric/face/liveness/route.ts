@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { TenantError } from "@/lib/types"
 import { signBiometricProof, verifyKioskRequest } from "@/lib/auth/checkin-tokens"
-import { getFaceProvider, searchFace } from "@/lib/services/face-recognition"
+import { searchFace } from "@/lib/services/face-recognition"
 import { checkFrame, verifyChallenge } from "@/lib/checkin/liveness"
 
 export const dynamic = "force-dynamic"
@@ -22,12 +22,12 @@ export async function POST(request: NextRequest) {
     }
 
     const claims = verifyChallenge(challenge, tenantId)
-    const match = await searchFace(faceImage, tenantId, { pose: true })
+    const match = await searchFace(faceImage, tenantId, { landmarks: true })
     if (!match.success && !match.noFace && match.faceWidthRatio === undefined) {
       return NextResponse.json({ error: match.error || "Face recognition is unavailable", code: "SERVICE_ERROR" }, { status: 503 })
     }
 
-    const result = checkFrame(claims, match, getFaceProvider())
+    const result = checkFrame(claims, match)
     switch (result.status) {
       case "passed":
         return NextResponse.json({

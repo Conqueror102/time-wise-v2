@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
     const { faceLiveness } = getCheckInPolicy(organization)
 
-    const faceResult = await searchFace(faceImage, tenantId, { pose: faceLiveness })
+    const faceResult = await searchFace(faceImage, tenantId, { landmarks: faceLiveness })
 
     if (!faceResult.success || !faceResult.staffId) {
       // NO_FACE: nobody in view; NOT_RECOGNIZED: a face that isn't enrolled here;
@@ -84,10 +84,10 @@ export async function POST(request: NextRequest) {
     }
 
     // The challenge starts from a straight-on frame, so every turn is measured from it
-    if (!isFacingCamera(faceResult.pose)) {
+    if (!isFacingCamera(faceResult.turn)) {
       return NextResponse.json({ ...recognised, liveness: { status: "face-camera", hint: "Look straight at the camera" } })
     }
-    const challenge = startChallenge(tenantId, staff.staffId, faceResult.pose)
+    const challenge = startChallenge(tenantId, staff.staffId, faceResult.turn)
     return NextResponse.json({ ...recognised, liveness: { status: "challenge", token: challenge.token, steps: challenge.steps } })
   } catch (error) {
     if (error instanceof TenantError) {

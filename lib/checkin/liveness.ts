@@ -9,6 +9,12 @@
  * straight-on frame that started the challenge. A flat picture can't turn its head,
  * and the random order defeats a recording of someone turning one fixed way.
  *
+ * The turn is measured from face landmarks (see headTurn in lib/services/compreface.ts)
+ * rather than a provider's yaw angle: CompreFace 1.2's pose plugin swaps the image
+ * centre's x and y, which skews its yaw by where the face sits in the frame. The
+ * landmark ratio has a fixed direction for every provider, and tilting a photo
+ * towards the camera hardly changes it.
+ *
  * The challenge is a short-lived signed token, so the server keeps no state: each
  * frame that completes a step returns a new token for the next step, and the final
  * step returns the biometric proof the check-in endpoint requires.
@@ -19,16 +25,15 @@
 
 import crypto from "crypto"
 import jwt from "jsonwebtoken"
-import type { FaceMatch, HeadPose } from "@/lib/services/compreface"
-import type { FaceProvider } from "@/lib/services/face-recognition"
+import type { FaceMatch } from "@/lib/services/compreface"
 import { TenantError, ErrorCodes } from "@/lib/types"
 
 export type LivenessStep = "left" | "right"
 
-/** How far the head must turn, in degrees of yaw, to count */
-export const TURN_DEGREES = 15
-/** The starting frame must be roughly straight on */
-export const MAX_START_YAW = 12
+/** How far the head must turn, as a landmark ratio: about 15 degrees for a real face */
+export const TURN_RATIO = 0.09
+/** The starting frame must be roughly straight on (about 13 degrees either way) */
+export const MAX_START_TURN = 0.08
 /** Faces get a little narrower when turned, so allow slightly smaller faces mid-challenge */
 export const MIN_FACE_WIDTH_RATIO = 0.12
 /** Time to finish every step once the challenge starts */
@@ -45,22 +50,12 @@ export interface LivenessClaims {
   steps: LivenessStep[]
   /** Index of the step the next frame must complete */
   step: number
-  /** Yaw of the straight-on frame that started the challenge */
-  baseYaw: number
+  /** Head turn of the straight-on frame that started the challenge */
+  baseTurn: number
   /** Random id, so two challenges are never identical */
   nonce: string
   /** Unix seconds when the challenge must be finished; carried through every step */
   deadline: number
-}
-
-/**
- * Which sign of yaw means the person turned to their own left. Providers differ, so it
- * can be overridden with FACE_YAW_LEFT_SIGN=1 or -1 if a check always fails one way.
- */
-export function leftYawSign(provider: FaceProvider | null): 1 | -1 {
-  const override = Number(process.env.FACE_YAW_LEFT_SIGN)
-  if (override === 1 || override === -1) return override
-  return provider === "rekognition" ? -1 : 1
 }
 
 /** Two turns, left and right, in a random order */
@@ -68,17 +63,17 @@ export function randomSteps(): LivenessStep[] {
   return crypto.randomInt(2) === 0 ? ["left", "right"] : ["right", "left"]
 }
 
-export function startChallenge(tenantId: string, staffId: string, pose: HeadPose): { token: string; steps: LivenessStep[] } {
+export function startChallenge(tenantId: string, staffId: string, turn: number): { token: string; steps: LivenessStep[] } {
   const steps = randomSteps()
   const deadline = Math.floor(Date.now() / 1000) + CHALLENGE_SECONDS
-  const claims: LivenessClaims = { kind: "liveness", tenantId, staffId, steps, step: 0, baseYaw: pose.yaw, nonce: crypto.randomUUID(), deadline }
+  const claims: LivenessClaims = { kind: "liveness", tenantId, staffId, steps, step: 0, baseTurn: turn, nonce: crypto.randomUUID(), deadline }
   return { token: signClaims(claims), steps }
 }
 
 function signClaims(claims: LivenessClaims): string {
-  const { kind, tenantId, staffId, steps, step, baseYaw, nonce, deadline } = claims
+  const { kind, tenantId, staffId, steps, step, baseTurn, nonce, deadline } = claims
   // exp is the deadline, so moving to the next step never extends the time allowed
-  return jwt.sign({ kind, tenantId, staffId, steps, step, baseYaw, nonce, deadline, exp: deadline }, JWT_SECRET, { issuer: ISSUER, audience: AUDIENCE })
+  return jwt.sign({ kind, tenantId, staffId, steps, step, baseTurn, nonce, deadline, exp: deadline }, JWT_SECRET, { issuer: ISSUER, audience: AUDIENCE })
 }
 
 export function verifyChallenge(token: string | null | undefined, tenantId: string): LivenessClaims {
@@ -93,8 +88,8 @@ export function verifyChallenge(token: string | null | undefined, tenantId: stri
 }
 
 /** Is this pose straight enough on to start a challenge from? */
-export function isFacingCamera(pose: HeadPose | undefined): pose is HeadPose {
-  return !!pose && Math.abs(pose.yaw) <= MAX_START_YAW
+export function isFacingCamera(turn: number | undefined): turn is number {
+  return turn !== undefined && Number.isFinite(turn) && Math.abs(turn) <= MAX_START_TURN
 }
 
 export type FrameResult =
@@ -108,7 +103,7 @@ export type FrameResult =
   | { status: "failed"; reason: string }
 
 /** Check one frame against the current step of a challenge */
-export function checkFrame(claims: LivenessClaims, match: FaceMatch, provider: FaceProvider | null): FrameResult {
+export function checkFrame(claims: LivenessClaims, match: FaceMatch): FrameResult {
   if (!match.success || !match.staffId) {
     return match.noFace
       ? { status: "continue", hint: "Keep your face in view" }
@@ -122,15 +117,15 @@ export function checkFrame(claims: LivenessClaims, match: FaceMatch, provider: F
   if ((match.faceWidthRatio ?? 0) < MIN_FACE_WIDTH_RATIO) {
     return { status: "continue", hint: "Stay close to the camera" }
   }
-  if (!match.pose) {
+  if (match.turn === undefined || !Number.isFinite(match.turn)) {
     return { status: "continue", hint: "Hold on…" }
   }
 
   const step = claims.steps[claims.step]
-  const wanted = (step === "left" ? 1 : -1) * leftYawSign(provider)
-  const turned = (match.pose.yaw - claims.baseYaw) * wanted
+  // Positive turn means the person turned to their own left
+  const turned = (match.turn - claims.baseTurn) * (step === "left" ? 1 : -1)
 
-  if (turned >= TURN_DEGREES) {
+  if (turned >= TURN_RATIO) {
     const next = claims.step + 1
     if (next >= claims.steps.length) return { status: "passed" }
     return { status: "next", token: signClaims({ ...claims, step: next }), step: claims.steps[next] }
