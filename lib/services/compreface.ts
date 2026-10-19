@@ -14,6 +14,12 @@ const REQUEST_TIMEOUT_MS = 30_000
 // Minimum confidence the face in the photo is a real face
 const DETECTION_THRESHOLD = 0.8
 
+export interface HeadPose {
+  yaw: number
+  pitch: number
+  roll: number
+}
+
 export interface FaceMatch {
   success: boolean
   staffId?: string
@@ -22,6 +28,8 @@ export interface FaceMatch {
   faceWidthRatio?: number
   /** True when no face was found at all (as opposed to an unknown face) */
   noFace?: boolean
+  /** Head pose in degrees, used by the liveness check */
+  pose?: HeadPose
   error?: string
 }
 
@@ -124,10 +132,10 @@ export async function registerFace(imageBase64: string, tenantId: string, staffI
 export async function searchFace(imageBase64: string, tenantId: string): Promise<FaceMatch> {
   try {
     const result = await request<{
-      result: { box?: { x_min: number; x_max: number }; subjects?: { subject: string; similarity: number }[] }[]
+      result: { box?: { x_min: number; x_max: number }; pose?: HeadPose; subjects?: { subject: string; similarity: number }[] }[]
     }>(
       "POST",
-      `/api/v1/recognition/recognize?limit=1&prediction_count=20&det_prob_threshold=${DETECTION_THRESHOLD}`,
+      `/api/v1/recognition/recognize?limit=1&prediction_count=20&det_prob_threshold=${DETECTION_THRESHOLD}&face_plugins=pose`,
       { file: imageBase64 }
     )
 
@@ -135,16 +143,17 @@ export async function searchFace(imageBase64: string, tenantId: string): Promise
     const imageWidth = getImageSize(Buffer.from(imageBase64, "base64"))?.width
     const faceWidthRatio = face?.box && imageWidth ? (face.box.x_max - face.box.x_min) / imageWidth : undefined
 
+    const pose = face?.pose && Number.isFinite(face.pose.yaw) ? face.pose : undefined
     const prefix = subjectFor(tenantId, "")
     const match = face?.subjects
       ?.filter((s) => s.subject.startsWith(prefix))
       .sort((a, b) => b.similarity - a.similarity)[0]
 
     if (!match || match.similarity < similarityThreshold()) {
-      return { success: false, faceWidthRatio, error: "Face not recognized" }
+      return { success: false, faceWidthRatio, pose, error: "Face not recognized" }
     }
 
-    return { success: true, staffId: match.subject.slice(prefix.length), confidence: match.similarity, faceWidthRatio }
+    return { success: true, staffId: match.subject.slice(prefix.length), confidence: match.similarity, faceWidthRatio, pose }
   } catch (error) {
     if (error instanceof CompreFaceError && /no face is found/i.test(error.message)) {
       return { success: false, noFace: true, error: friendlyError(error) }

@@ -14,6 +14,8 @@ export interface CheckInPolicy {
   verifyFaceOnIdCheckIn: boolean
   /** The kiosk must send a photo (to keep it, to verify the face, or both) */
   requirePhoto: boolean
+  /** Face check-ins and face verification must pass the head-turn liveness check */
+  faceLiveness: boolean
   timezone: string
   latenessTime: string
   earlyDepartureTime: string
@@ -34,6 +36,8 @@ export function getCheckInPolicy(organization: any): CheckInPolicy {
     capturePhotos,
     verifyFaceOnIdCheckIn,
     requirePhoto: capturePhotos || verifyFaceOnIdCheckIn,
+    // On by default whenever face recognition is available; admins can turn it off
+    faceLiveness: settings.faceLiveness !== false && isFaceRecognitionConfigured(),
     timezone: isValidTimeZone(settings.timezone) ? settings.timezone : DEFAULT_TIMEZONE,
     latenessTime: settings.latenessTime || "09:00",
     earlyDepartureTime: settings.earlyDepartureTime || "17:00",

@@ -22,7 +22,14 @@ interface LastAction {
   isEarly?: boolean
 }
 
-export function useCheckin(checkInToken: string) {
+/**
+ * Asks the person at the kiosk to confirm their face (recognition plus the head-turn
+ * liveness check). Resolves with a proof and the photo used, or null if they cancel.
+ */
+export type ConfirmFace = (staffId: string) => Promise<{ proof: string; photo: string } | null>
+
+export function useCheckin(checkInToken: string, options: { confirmFace?: ConfirmFace } = {}) {
+  const { confirmFace } = options
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState("")
   const [error, setError] = useState("")
@@ -158,7 +165,7 @@ export function useCheckin(checkInToken: string) {
     setSuccess("")
 
     try {
-      const response = await fetch("/api/attendance/checkin", {
+      const send = (sentPhoto: string | undefined, proofs: string[]) => fetch("/api/attendance/checkin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -167,14 +174,25 @@ export function useCheckin(checkInToken: string) {
         body: JSON.stringify({
           staffId: staffId.trim().toUpperCase(),
           type,
-          photo,
+          photo: sentPhoto,
           method: method || "manual",
-          biometricProofs,
+          biometricProofs: proofs,
           qrData,
         }),
       })
 
-      const data = await response.json()
+      let response = await send(photo, biometricProofs)
+      let data = await response.json()
+
+      // QR / Staff ID check-in with face verification: confirm the person is really
+      // there (head-turn check), then send again with the proof and that photo
+      if (response.status === 428 && data.code === "LIVENESS_REQUIRED") {
+        if (!confirmFace) throw new Error(data.error || "Face confirmation is required")
+        const confirmation = await confirmFace(staffId.trim().toUpperCase())
+        if (!confirmation) throw new Error("Face confirmation was cancelled. Please try again.")
+        response = await send(confirmation.photo, [...biometricProofs, confirmation.proof])
+        data = await response.json()
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -238,7 +256,7 @@ export function useCheckin(checkInToken: string) {
     } finally {
       setLoading(false)
     }
-  }, [checkInToken, checkAttendanceStatus])
+  }, [checkInToken, checkAttendanceStatus, confirmFace])
 
   const handleCheckIn = useCallback(async (
     staffId: string,

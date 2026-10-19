@@ -41,6 +41,8 @@ export interface BiometricProofClaims extends BaseClaims {
   kind: "biometric_proof"
   staffId: string
   method: "face"
+  /** True when the face also passed the liveness check (see lib/checkin/liveness.ts) */
+  live?: boolean
 }
 
 function sign(claims: BaseClaims & Record<string, unknown>, expiresIn: jwt.SignOptions["expiresIn"]): string {
@@ -80,8 +82,8 @@ export function verifyEnrollmentToken(token: string | null | undefined): EnrollC
   return verify<EnrollClaims>(token, "enroll")
 }
 
-export function signBiometricProof(tenantId: string, staffId: string, method: "face"): string {
-  return sign({ kind: "biometric_proof", tenantId, staffId, method }, "2m")
+export function signBiometricProof(tenantId: string, staffId: string, method: "face", options: { live?: boolean } = {}): string {
+  return sign({ kind: "biometric_proof", tenantId, staffId, method, live: options.live === true }, "2m")
 }
 
 export function verifyBiometricProof(token: string | null | undefined): BiometricProofClaims {

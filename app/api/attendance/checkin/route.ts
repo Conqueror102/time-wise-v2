@@ -13,7 +13,7 @@ import { ObjectId } from "mongodb"
 import { getDatabase } from "@/lib/mongodb"
 import { createTenantDatabase } from "@/lib/database/tenant-db"
 import { Staff, AttendanceLog, TenantError } from "@/lib/types"
-import { verifyBiometricProof, verifyKioskRequest } from "@/lib/auth/checkin-tokens"
+import { BiometricProofClaims, verifyBiometricProof, verifyKioskRequest } from "@/lib/auth/checkin-tokens"
 import { getCheckInPolicy } from "@/lib/checkin/policy"
 import { verifyStaffQrPayload } from "@/lib/checkin/qr"
 import { getZonedDateTime } from "@/lib/utils/date"
@@ -84,25 +84,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Face check-ins must carry the proof issued when the face was recognised
-    const requiredMethods: "face"[] = method === "face" ? ["face"] : []
+    // Proofs issued for this staff member when their face was recognised (and, with
+    // liveness on, after they passed the head-turn check)
+    const proofs: BiometricProofClaims[] = []
+    for (const token of Array.isArray(biometricProofs) ? biometricProofs : []) {
+      try {
+        const proof = verifyBiometricProof(token)
+        if (proof.tenantId === tenantId && proof.staffId === staffId) proofs.push(proof)
+      } catch {
+        // ignore invalid or expired proofs
+      }
+    }
+    const hasFaceProof = proofs.some((proof) => proof.method === "face" && (!policy.faceLiveness || proof.live))
 
-    if (requiredMethods.length > 0) {
-      const verifiedMethods = new Set<string>()
-      for (const token of Array.isArray(biometricProofs) ? biometricProofs : []) {
-        try {
-          const proof = verifyBiometricProof(token)
-          if (proof.tenantId === tenantId && proof.staffId === staffId) verifiedMethods.add(proof.method)
-        } catch {
-          // ignore invalid or expired proofs
-        }
-      }
-      if (!requiredMethods.every((m) => verifiedMethods.has(m))) {
-        return NextResponse.json(
-          { error: "Biometric verification is required", success: false },
-          { status: 401 }
-        )
-      }
+    // Face check-ins must carry the proof issued when the face was recognised
+    if (method === "face" && !hasFaceProof) {
+      return NextResponse.json(
+        { error: "Biometric verification is required", success: false },
+        { status: 401 }
+      )
     }
 
     if (policy.requirePhoto && !photo) {
@@ -118,6 +118,16 @@ export async function POST(request: NextRequest) {
     if (policy.verifyFaceOnIdCheckIn && (method === "qr" || method === "manual")) {
       if (!staff.faceData) {
         faceVerification = "not-registered"
+      } else if (policy.faceLiveness) {
+        // A single photo could be a picture of the staff member, so the kiosk has to
+        // run the head-turn check for this person first
+        if (!hasFaceProof) {
+          return NextResponse.json(
+            { error: "Look at the camera to confirm it's you", code: "LIVENESS_REQUIRED", success: false },
+            { status: 428 }
+          )
+        }
+        faceVerification = "matched"
       } else {
         const match = await searchFace(photo, tenantId)
         if (match.success && match.staffId === staffId) {

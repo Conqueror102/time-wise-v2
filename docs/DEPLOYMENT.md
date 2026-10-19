@@ -202,6 +202,7 @@ All settings live in `.env` (see `.env.example`).
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | No | Store check-in photos in Cloudinary instead of MongoDB. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | No | Use AWS Rekognition instead of CompreFace (paid). |
 | `FACE_RECOGNITION_PROVIDER` | No | `compreface` or `rekognition`, only if both are configured. |
+| `FACE_YAW_LEFT_SIGN` | No | `1` or `-1`: which sign of head-pose yaw means "turned left" for the anti-spoofing check. Only set it if the head-turn check always fails one way. |
 | `MONGODB_URI` | Set by Compose | Only needed when running without Docker. |
 
 After changing `.env`, restart the app: `docker compose up -d app` (add the prod/profile flags in production).

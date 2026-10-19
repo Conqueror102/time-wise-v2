@@ -8,11 +8,17 @@
  * close to the camera and the same person is seen in consecutive scans.
  * Check-in then happens automatically; check-out needs a tap, because an
  * accidental check-out would silently corrupt someone's day.
+ *
+ * With liveness on, the recognised person is then asked to turn their head left and
+ * right in a random order before anything is recorded, so a photo held up to the
+ * camera can't check someone in.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Camera, CheckCircle2, Loader2, LogOut, ScanFace, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { LivenessPrompt } from "@/components/checkin/liveness-prompt"
+import { runLiveness, type LivenessProgress } from "@/lib/checkin/liveness-client"
 
 // Face width as a share of the frame width: ~15% is roughly arm's length from a webcam
 const MIN_FACE_WIDTH_RATIO = 0.15
@@ -43,6 +49,7 @@ type Phase =
   | { kind: "idle" }
   | { kind: "scanning"; hint: string }
   | { kind: "working"; name: string }
+  | { kind: "liveness"; name: string; progress: LivenessProgress }
   | { kind: "confirm-checkout"; staffId: string; name: string; proof: string; photo: string }
   | { kind: "result"; tone: "success" | "info" | "error"; title: string; detail?: string }
 
@@ -229,8 +236,26 @@ export function HandsFreeFace({ checkInToken, onCheckIn }: HandsFreeFaceProps) {
                     ? { staffId: data.staffId, count: streak.current.count + 1 }
                     : { staffId: data.staffId, count: 1 }
                 if (streak.current.count >= REQUIRED_MATCHES) {
-                  streak.current = { staffId: "", count: 0 }
-                  await act(data.staffId, data.staffName, data.biometricProof, frame)
+                  if (data.biometricProof) {
+                    streak.current = { staffId: "", count: 0 }
+                    await act(data.staffId, data.staffName, data.biometricProof, frame)
+                  } else if (data.liveness?.status === "challenge") {
+                    streak.current = { staffId: "", count: 0 }
+                    const outcome = await runLiveness({
+                      checkInToken,
+                      challenge: data.liveness,
+                      captureFrame,
+                      onProgress: (progress) => setPhase({ kind: "liveness", name: data.staffName, progress }),
+                      isCancelled: () => stopped,
+                    })
+                    if (outcome.ok) {
+                      await act(data.staffId, data.staffName, outcome.proof, outcome.photo)
+                    } else if (!stopped) {
+                      showResult({ tone: "error", title: "Couldn't confirm it's you", detail: outcome.error })
+                    }
+                  } else {
+                    setPhase({ kind: "scanning", hint: data.liveness?.hint || "Look straight at the camera" })
+                  }
                 } else {
                   setPhase({ kind: "scanning", hint: `Hi ${data.staffName}, hold still…` })
                 }
@@ -268,7 +293,7 @@ export function HandsFreeFace({ checkInToken, onCheckIn }: HandsFreeFaceProps) {
       stopped = true
       clearTimeout(first)
     }
-  }, [stream, checkInToken, act])
+  }, [stream, checkInToken, act, showResult])
 
   const toneStyles = {
     success: "bg-green-600",
@@ -299,6 +324,8 @@ export function HandsFreeFace({ checkInToken, onCheckIn }: HandsFreeFaceProps) {
             <div className="w-2/5 aspect-[3/4] rounded-[50%] border-4 border-white/70" />
           </div>
         )}
+
+        {phase.kind === "liveness" && <LivenessPrompt progress={phase.progress} name={phase.name} />}
 
         {(phase.kind === "working" || phase.kind === "result" || phase.kind === "confirm-checkout") && (
           <div
