@@ -43,13 +43,21 @@ export async function registerFace(
   return { ...result, provider }
 }
 
-export async function searchFace(imageBase64: string, tenantId: string): Promise<compreface.FaceMatch> {
+/**
+ * Find which of this tenant's staff is in the photo.
+ * Pass `landmarks: true` when the head turn is needed for a liveness check.
+ */
+export async function searchFace(
+  imageBase64: string,
+  tenantId: string,
+  options: { landmarks?: boolean } = {}
+): Promise<compreface.FaceMatch> {
   const provider = getFaceProvider()
   if (!provider) return { success: false, error: NOT_CONFIGURED }
 
   return provider === "compreface"
     ? compreface.searchFace(imageBase64, tenantId)
-    : rekognition.searchFace(imageBase64, tenantId)
+    : rekognition.searchFace(imageBase64, tenantId, options)
 }
 
 /**

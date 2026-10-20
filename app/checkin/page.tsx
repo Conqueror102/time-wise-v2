@@ -5,13 +5,14 @@
  * Can be used on kiosk or staff mobile devices
  */
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import React from "react"
 import { getUTCDate } from "@/lib/utils/date"
 import { User, QrCode, ScanFace, Lock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HandsFreeFace } from "@/components/checkin/hands-free-face"
+import { FaceConfirmDialog } from "@/components/checkin/face-confirm-dialog"
 import { UnlockScreen } from "@/components/checkin/unlock-screen"
 import { CheckinHeader } from "@/components/checkin/checkin-header"
 import { SuccessMessage } from "@/components/checkin/success-message"
@@ -46,6 +47,13 @@ export default function CheckInPage() {
   const { toast } = useToast()
   
 
+  // QR / Staff ID check-ins that need a face confirmation open this dialog
+  const [faceConfirm, setFaceConfirm] = useState<{ staffId: string; resolve: (result: { proof: string; photo: string } | null) => void } | null>(null)
+  const confirmFace = useCallback(
+    (id: string) => new Promise<{ proof: string; photo: string } | null>((resolve) => setFaceConfirm({ staffId: id, resolve })),
+    []
+  )
+
   // Use custom hook for check-in logic
   const {
     loading,
@@ -58,7 +66,7 @@ export default function CheckInPage() {
     handleCheckIn: handleCheckInLogic,
     clearMessages,
     resetAttendanceStatus,
-  } = useCheckin(checkInToken)
+  } = useCheckin(checkInToken, { confirmFace })
 
   const availableMethods = [
     { value: "manual", label: "Manual", hint: "Enter your Staff ID", Icon: User, enabled: enabledCheckInMethods.manualEntry },
@@ -433,6 +441,16 @@ export default function CheckInPage() {
 
   return (
     <>
+      {faceConfirm && (
+        <FaceConfirmDialog
+          checkInToken={checkInToken}
+          staffId={faceConfirm.staffId}
+          onDone={(result) => {
+            faceConfirm.resolve(result)
+            setFaceConfirm(null)
+          }}
+        />
+      )}
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
         <CheckinHeader organizationName={organizationName} capturePhotos={capturePhotos} />

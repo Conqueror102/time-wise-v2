@@ -10,8 +10,9 @@ import {
   DeleteFacesCommand,
   CreateCollectionCommand,
   ListCollectionsCommand,
+  DetectFacesCommand,
 } from "@aws-sdk/client-rekognition"
-import type { FaceMatch } from "./compreface"
+import { headTurn, type FaceMatch } from "./compreface"
 
 export function isRekognitionConfigured(): boolean {
   return !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
@@ -125,9 +126,21 @@ export async function registerFace(
 /**
  * Search for a face in AWS Rekognition
  */
+/** Head turn of the largest face in the photo (SearchFacesByImage doesn't return landmarks) */
+async function detectTurn(client: RekognitionClient, imageBuffer: Buffer): Promise<number | undefined> {
+  const response = await client.send(new DetectFacesCommand({ Image: { Bytes: imageBuffer }, Attributes: ["DEFAULT"] }))
+  const point = (type: string) => {
+    const mark = response.FaceDetails?.[0]?.Landmarks?.find((landmark) => landmark.Type === type)
+    return mark?.X !== undefined && mark.Y !== undefined ? ([mark.X, mark.Y] as [number, number]) : undefined
+  }
+  const [eyeLeft, eyeRight, nose] = [point("eyeLeft"), point("eyeRight"), point("nose")]
+  return eyeLeft && eyeRight && nose ? headTurn({ eyes: [eyeLeft, eyeRight], nose }) : undefined
+}
+
 export async function searchFace(
   imageBase64: string,
-  tenantId: string
+  tenantId: string,
+  options: { landmarks?: boolean } = {}
 ): Promise<FaceMatch> {
   const client = getClient()
   
@@ -175,6 +188,8 @@ export async function searchFace(
       staffId: match.Face!.ExternalImageId!.slice(prefix.length),
       confidence: match.Similarity,
       faceWidthRatio,
+      // Only fetched for liveness checks: it is a second, billed API call
+      turn: options.landmarks ? await detectTurn(client, imageBuffer) : undefined,
     }
   } catch (error: any) {
     // Rekognition reports "no face in the image" as an invalid parameter

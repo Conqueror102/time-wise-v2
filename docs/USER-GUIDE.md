@@ -126,7 +126,8 @@ The kiosk offers only the methods you enabled in Settings; staff can use any of 
 
 1. Open the **Face** tab — the camera starts by itself.
 2. The staff member steps up and looks at the camera.
-3. After about two seconds: **"Welcome, Ada! Checked in at 08:52"**. No buttons needed.
+3. With **Anti-Spoofing Head-Turn Check** on (the default), an arrow asks them to turn their head left and right, in a random order. It takes about two seconds.
+4. **"Welcome, Ada! Checked in at 08:52"**. No buttons needed.
 
 **Checking out:** when someone who is already checked in looks at the camera, a **Check out** button appears. They tap it to check out. Nothing happens if they don't — so walking past the kiosk during the day never checks anyone out.
 
@@ -137,6 +138,8 @@ Messages staff may see:
 | *Step a little closer to the camera* | They're too far away (this is also why people walking past aren't recorded). |
 | *Face not recognised. Ask your administrator to register you.* | Their face isn't registered, or the lighting is very different — register again. |
 | *You're done for today* | Check-in and check-out are already recorded. |
+| *Turn your head to your left / right* | The anti-spoofing check: follow the arrow. |
+| *Couldn't confirm it's you* | The head turns weren't seen in time, or a different face appeared. Look at the camera to try again. |
 
 ### Manual entry
 
@@ -219,7 +222,10 @@ Their day shows a check-in without a check-out. They're counted as present, and 
 Not from the kiosk: it needs your passcode to unlock, face check-in needs the person in front of the camera, and fingerprint check-in needs the physical device.
 
 **Can someone check in for a colleague?**
-Not if you turn on **Verify Face on QR Code and Staff ID Check-Ins** and register your staff's faces: the kiosk then checks that the person at the camera is the owner of the QR code or Staff ID. Without it, anyone who knows a colleague's Staff ID (with Manual Entry on) or has their QR code could. Face check-in and fingerprint devices also prevent it. (Face recognition doesn't yet detect a printed photo held up to the camera.)
+Not if you turn on **Verify Face on QR Code and Staff ID Check-Ins** and register your staff's faces: the kiosk then checks that the person at the camera is the owner of the QR code or Staff ID. Without it, anyone who knows a colleague's Staff ID (with Manual Entry on) or has their QR code could. Face check-in and fingerprint devices also prevent it.
+
+**Can someone hold up a colleague's photo to the camera?**
+Not with **Anti-Spoofing Head-Turn Check** on (the default). After a face is recognised, the kiosk asks the person to turn their head left and right in a random order, and only records the check-in when the same face really turns each way. A printed photo or a picture on a phone can't turn its head, and the random order defeats a recording of someone turning one fixed way. The same check runs when **Verify Face on QR Code and Staff ID Check-Ins** confirms the person behind a QR code or Staff ID. It's built to stop photos, screens and simple recordings, not a realistic 3D mask.
 
 **We changed timezone. Is old data affected?**
 Existing records keep the date they were recorded on; new check-ins use the new timezone.

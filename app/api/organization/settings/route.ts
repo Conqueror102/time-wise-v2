@@ -27,6 +27,7 @@ export async function PATCH(request: NextRequest) {
       checkInPasscode,
       capturePhotos,
       verifyFaceOnIdCheckIn,
+      faceLiveness,
       // photoRetentionDays removed - retention is fixed to 7 days by default
       enabledCheckInMethods,
     } = body
@@ -58,6 +59,7 @@ export async function PATCH(request: NextRequest) {
     if (checkInPasscode !== undefined) updateData["settings.checkInPasscode"] = checkInPasscode
     if (capturePhotos !== undefined) updateData["settings.capturePhotos"] = capturePhotos
     if (verifyFaceOnIdCheckIn !== undefined) updateData["settings.verifyFaceOnIdCheckIn"] = verifyFaceOnIdCheckIn === true
+    if (faceLiveness !== undefined) updateData["settings.faceLiveness"] = faceLiveness !== false
     // Intentionally ignore photoRetentionDays updates; retention is fixed at 7 days
     if (enabledCheckInMethods !== undefined) updateData["settings.enabledCheckInMethods"] = enabledCheckInMethods
 

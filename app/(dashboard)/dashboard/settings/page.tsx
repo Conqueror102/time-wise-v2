@@ -32,6 +32,7 @@ export default function SettingsPage() {
     checkInPasscode: "",
     capturePhotos: false,
     verifyFaceOnIdCheckIn: false,
+    faceLiveness: true,
     enabledCheckInMethods: {
       qrCode: true,
       manualEntry: true,
@@ -50,6 +51,7 @@ export default function SettingsPage() {
       checkInPasscode: org.settings?.checkInPasscode || "",
       capturePhotos: org.settings?.capturePhotos === true,
       verifyFaceOnIdCheckIn: org.settings?.verifyFaceOnIdCheckIn === true,
+      faceLiveness: org.settings?.faceLiveness !== false,
       enabledCheckInMethods: org.settings?.enabledCheckInMethods || {
         qrCode: true,
         manualEntry: true,
@@ -327,6 +329,43 @@ export default function SettingsPage() {
                 }`}>
                   <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
                     settings.verifyFaceOnIdCheckIn ? "translate-x-5" : "translate-x-0"
+                  } mt-0.5 ml-0.5`}></div>
+                </div>
+              </label>
+            </div>
+
+            <div className={`flex items-center justify-between p-4 rounded-lg border-2 transition-colors ${
+              settings.faceLiveness && faceRecognitionAvailable ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"
+            }`}>
+              <div className="flex-1">
+                <Label htmlFor="faceLiveness" className={`font-medium ${faceRecognitionAvailable ? "cursor-pointer" : "text-gray-500"}`}>
+                  Anti-Spoofing Head-Turn Check
+                </Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  After a face is recognised, the kiosk asks the person to turn their head left and right in a random
+                  order before recording anything, so a printed photo or a picture on a phone can&apos;t check someone in.
+                  Applies to face check-ins and to face verification on QR code and Staff ID check-ins.
+                </p>
+                {!faceRecognitionAvailable && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Needs face recognition, which isn&apos;t set up on this server yet.
+                  </p>
+                )}
+              </div>
+              <label className={`relative inline-flex items-center ml-4 ${faceRecognitionAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
+                <input
+                  type="checkbox"
+                  id="faceLiveness"
+                  checked={settings.faceLiveness}
+                  disabled={!faceRecognitionAvailable}
+                  onChange={(e) => setSettings(prev => ({ ...prev, faceLiveness: e.target.checked }))}
+                  className="sr-only"
+                />
+                <div className={`w-11 h-6 rounded-full transition-colors ${
+                  settings.faceLiveness ? "bg-blue-600" : "bg-gray-300"
+                }`}>
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                    settings.faceLiveness ? "translate-x-5" : "translate-x-0"
                   } mt-0.5 ml-0.5`}></div>
                 </div>
               </label>
